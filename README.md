@@ -1,2 +1,2 @@
 # sushi noms 🍣
-byte sized ways to interact with sushi finance 🥢
+byte_sized ways to interact with sushi finance 🥢
