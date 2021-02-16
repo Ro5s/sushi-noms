@@ -33,6 +33,13 @@ interface ISushiBar {
    function leave(uint256 _share) external;
 }
 
+/// @dev brief interface for aave lending protocol token txs
+interface IAaveDepositWithdraw {
+    function UNDERLYING_ASSET_ADDRESS() external view returns (address);
+    function deposit(address asset, uint256 amount, address onBehalfOf, uint16 referralCode) external;
+    function withdraw(address token, uint256 amount, address destination) external;
+}
+
 /// @dev helper for address type
 library Address { 
     function isContract(address account) internal view returns (bool) {
@@ -194,6 +201,7 @@ contract SushiMinion is ReentrancyGuard {
 
     receive() external payable {}
 }
+
 
 /*===============================
 WELCOME TO THE POOL PARTY (飲み会)
@@ -376,7 +384,6 @@ contract SushiNomikai is ReentrancyGuard {
         depositToken = _sushiToken;
         sushiToken = _sushiToken;
         xSushiToken = _xSushiToken;
-        aXSushiToken = _aXSushiToken;
         
         periodDuration = _periodDuration;
         votingPeriodLength = _votingPeriodLength;
