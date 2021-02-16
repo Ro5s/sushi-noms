@@ -275,6 +275,49 @@ contract SushiParty is ReentrancyGuard {
         memberAddressByDelegateKey[_summoner] = _summoner;
         totalShares = 1;
     }
+    
+    /******************
+    SUSHI GUILD STAKING
+    ******************/
+    function makeSushiDeposit(uint256 tributeOffered) external nonReentrant {
+        require(IERC20(sushiToken).transferFrom(msg.sender, address(this), tributeOffered), "sushi tribute failed");
+        
+        address xSushi = xSushiToken;
+        
+        uint256 startBalance = IERC20(xSushi).balanceOf(address(this));
+        
+        ISushiBar(xSushi).enter(tributeOffered);
+        
+        uint256 shares = IERC20(xSushi).balanceOf(address(this)).sub(startBalance);
+        
+        if (!members[msg.sender].exists) {
+            members[msg.sender] = Member(msg.sender, shares, 0, true, 0, 0);
+            memberAddressByDelegateKey[msg.sender] = msg.sender;
+        } else {
+            members[msg.sender].shares += shares;
+        }
+        
+        unsafeAddToBalance(GUILD, xSushi, shares);
+        
+        totalShares += shares;
+    }
+    
+    function makeXSushiDeposit(uint256 tributeOffered) external nonReentrant {
+        address xSushi = xSushiToken;
+
+        require(IERC20(xSushi).transferFrom(msg.sender, address(this), tributeOffered), "xSushi tribute failed");
+        
+        if (!members[msg.sender].exists) {
+            members[msg.sender] = Member(msg.sender, tributeOffered, 0, true, 0, 0);
+            memberAddressByDelegateKey[msg.sender] = msg.sender;
+        } else {
+            members[msg.sender].shares += tributeOffered;
+        }
+        
+        unsafeAddToBalance(GUILD, xSushi, tributeOffered);
+        
+        totalShares += tributeOffered;
+    }
 
     /*****************
     PROPOSAL FUNCTIONS
@@ -751,24 +794,6 @@ contract SushiParty is ReentrancyGuard {
         return getCurrentPeriod() >= startingPeriod.add(votingPeriodLength);
     }
     
-    // ****************
-    // STAKE ACCOUNTING
-    // ****************
-    function makeDeposit(uint256 tributeOffered) external {
-        require(IERC20(sushiToken).transferFrom(msg.sender, address(this), tributeOffered), "sushi tribute failed");
-        
-        ISushiBar(xSushiToken).enter(tributeOffered);
-        
-        if (!members[msg.sender].exists) {
-            members[msg.sender] = Member(msg.sender, tributeOffered, 0, true, 0, 0);
-            memberAddressByDelegateKey[msg.sender] = msg.sender;
-        } else {
-            members[msg.sender].shares += tributeOffered;
-        }
-
-        totalShares += tributeOffered;
-    }
-
     /***************
     GETTER FUNCTIONS
     ***************/
