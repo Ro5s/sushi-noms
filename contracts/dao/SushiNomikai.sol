@@ -224,9 +224,9 @@ contract SushiNomikai is ReentrancyGuard {
     uint256 public summoningTime; // needed to determine the current period
 
     address public depositToken; // deposit token contract reference; default = wETH
-    address immutable sushiToken; // sushi token contract reference
-    address immutable xSushiToken; // "sushi bar" xSushi token contract reference
-    address payable public immutable sushiMinion; // sushi minion contract reference
+    address immutable sushiToken; // sushi token contract reference - 0x6B3595068778DD592e39A122f4f5a5cF09C90fE2
+    address immutable xSushiToken; // "sushi bar" xSushi token contract reference - 0x8798249c2E607446EfB7Ad49eC89dD1865Ff4272
+    address payable public immutable sushiMinion; // sushi minion contract reference 
 
     // HARD-CODED LIMITS
     // These numbers are quite arbitrary; they are small enough to avoid overflows when doing calculations
