@@ -33,13 +33,6 @@ interface ISushiBar {
    function leave(uint256 _share) external;
 }
 
-/// @dev brief interface for aave lending protocol token txs
-interface IAaveDepositWithdraw {
-    function UNDERLYING_ASSET_ADDRESS() external view returns (address);
-    function deposit(address asset, uint256 amount, address onBehalfOf, uint16 referralCode) external;
-    function withdraw(address token, uint256 amount, address destination) external;
-}
-
 /// @dev helper for address type
 library Address { 
     function isContract(address account) internal view returns (bool) {
@@ -203,11 +196,12 @@ contract SushiMinion is ReentrancyGuard {
 }
 
 
-/*===============================
+/*=====================================
 WELCOME TO THE POOL PARTY (飲み会)
-**USE AT YOUR OWN RISK**
-Developed by Peeps Democracy & LexDAO
-===================================*/
+__Developed by Peeps Democracy & LexDAO
+__USE AT YOUR OWN RISK__
+====================================*/
+/// SushiNomikai is the coolest party in town. You come in with some Sushi and stake (xSushi) to vote on party matters, like what food gets served. You can leave anytime with your fair share of party food. 
 contract SushiNomikai is ReentrancyGuard {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
@@ -224,9 +218,9 @@ contract SushiNomikai is ReentrancyGuard {
     uint256 public summoningTime; // needed to determine the current period
 
     address public depositToken; // deposit token contract reference; default = wETH
-    address immutable sushiToken; // sushi token contract reference - 0x6B3595068778DD592e39A122f4f5a5cF09C90fE2
-    address immutable xSushiToken; // "sushi bar" xSushi token contract reference - 0x8798249c2E607446EfB7Ad49eC89dD1865Ff4272
-    address payable public immutable sushiMinion; // sushi minion contract reference 
+    address immutable sushiToken; // sushi token contract reference
+    address immutable xSushiToken; // "sushi bar" xSushi token contract reference
+    address payable public immutable sushiMinion; // sushi minion contract reference
 
     // HARD-CODED LIMITS
     // These numbers are quite arbitrary; they are small enough to avoid overflows when doing calculations
