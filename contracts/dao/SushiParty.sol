@@ -129,6 +129,7 @@ contract SushiParty is ReentrancyGuard {
     // EVENTS
     // ***************
     event SummonComplete(address indexed summoner, address[] tokens, uint256 summoningTime, uint256 periodDuration, uint256 votingPeriodLength, uint256 gracePeriodLength, uint256 proposalDeposit, uint256 dilutionBound, uint256 processingReward);
+    event MakeDeposit(address indexed memberAddress, uint256 tributeOffered, uint256 indexed shares);
     event SubmitProposal(address indexed applicant, uint256 sharesRequested, uint256 lootRequested, uint256 tributeOffered, address tributeToken, uint256 paymentRequested, address paymentToken, string details, bool[6] flags, uint256 proposalId, address indexed delegateKey, address indexed memberAddress);
     event SponsorProposal(address indexed delegateKey, address indexed memberAddress, uint256 proposalId, uint256 proposalIndex, uint256 startingPeriod);
     event SubmitVote(uint256 proposalId, uint256 indexed proposalIndex, address indexed delegateKey, address indexed memberAddress, uint8 uintVote);
@@ -250,6 +251,8 @@ contract SushiParty is ReentrancyGuard {
         tokenWhitelist[_xSushiToken] = true;
         approvedTokens.push(_xSushiToken);
         
+        IERC20(_sushiToken).approve(_xSushiToken, uint256(-1)); // max approve sushi bar 
+        
         // NOTE: move event up here, avoid stack too deep if too many approved tokens
         emit SummonComplete(_summoner, _approvedTokens, now, _periodDuration, _votingPeriodLength, _gracePeriodLength, _proposalDeposit, _dilutionBound, _processingReward);
 
@@ -259,8 +262,6 @@ contract SushiParty is ReentrancyGuard {
             tokenWhitelist[_approvedTokens[i]] = true;
             approvedTokens.push(_approvedTokens[i]);
         }
-        
-        IERC20(_sushiToken).approve(_xSushiToken, uint256(-1)); // max approve sushi bar 
         
         periodDuration = _periodDuration;
         votingPeriodLength = _votingPeriodLength;
@@ -288,7 +289,7 @@ contract SushiParty is ReentrancyGuard {
         
         ISushiBar(xSushi).enter(tributeOffered);
         
-        uint256 shares = IERC20(xSushi).balanceOf(address(this)).sub(startBalance);
+        uint256 shares = IERC20(xSushi).balanceOf(address(this)) - startBalance / 10**18;
         
         if (!members[msg.sender].exists) {
             members[msg.sender] = Member(msg.sender, shares, 0, true, 0, 0);
@@ -297,26 +298,33 @@ contract SushiParty is ReentrancyGuard {
             members[msg.sender].shares += shares;
         }
         
-        unsafeAddToBalance(GUILD, xSushi, shares);
-        
+        require(totalShares + shares <= MAX_NUMBER_OF_SHARES_AND_LOOT, "too many shares requested");
         totalShares += shares;
+        
+        unsafeAddToBalance(GUILD, xSushi, tributeOffered);
+        
+        emit MakeDeposit(msg.sender, tributeOffered, shares);
     }
     
     function makeXSushiDeposit(uint256 tributeOffered) external nonReentrant {
         address xSushi = xSushiToken;
+        uint256 shares = tributeOffered / 10**18;
 
         require(IERC20(xSushi).transferFrom(msg.sender, address(this), tributeOffered), "xSushi tribute failed");
         
         if (!members[msg.sender].exists) {
-            members[msg.sender] = Member(msg.sender, tributeOffered, 0, true, 0, 0);
+            members[msg.sender] = Member(msg.sender, shares, 0, true, 0, 0);
             memberAddressByDelegateKey[msg.sender] = msg.sender;
         } else {
-            members[msg.sender].shares += tributeOffered;
+            members[msg.sender].shares += shares;
         }
+        
+        require(totalShares + shares <= MAX_NUMBER_OF_SHARES_AND_LOOT, "too many shares requested");
+        totalShares += shares;
         
         unsafeAddToBalance(GUILD, xSushi, tributeOffered);
         
-        totalShares += tributeOffered;
+        emit MakeDeposit(msg.sender, tributeOffered, shares);
     }
 
     /*****************
