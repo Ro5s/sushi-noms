@@ -22,4 +22,4 @@ interface IBentoBridge {
         uint256 amount,
         uint256 share
     ) external returns (uint256 amountOut, uint256 shareOut);
-}}
+}
