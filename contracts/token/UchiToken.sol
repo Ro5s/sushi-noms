@@ -1,7 +1,14 @@
 /// SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.0;
 
-interface ISushiSwapLaunch {
+/// @notice Interface for ERC20 token forwarding.
+interface IERC20FWD { 
+    function approve(address spender, uint256 amount) external returns (bool);
+    function transferFrom(address from, address to, uint256 amount) external returns (bool);
+}
+
+/// @notice Interface for SushiSwap pair creation and liquidity provision.
+interface ILAUNCHSUSHISWAP {
     function createPair(address tokenA, address tokenB) external returns (address pair);
     
     function addLiquidity(
@@ -25,12 +32,13 @@ interface ISushiSwapLaunch {
     ) external payable returns (uint amountToken, uint amountETH, uint liquidity);
 }
 
+/// @notice Simple restricted token with SushiSwap launch and minimal governance.
 contract UchiToken {
-    ISushiSwapLaunch constant private sushiSwapFactory = ISushiSwapLaunch(0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac);
-    ISushiSwapLaunch constant private sushiSwapRouter = ISushiSwapLaunch(0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F);
+    ILAUNCHSUSHISWAP constant private sushiSwapFactory = ILAUNCHSUSHISWAP(0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac);
+    ILAUNCHSUSHISWAP constant private sushiSwapRouter = ILAUNCHSUSHISWAP(0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F);
     
     address public owner;
-    address public sushiPair;
+    address public sushiPair; // Uchi SushiSwap pair
     string public name;
     string public symbol;
     uint8 constant public decimals = 18;
@@ -56,8 +64,6 @@ contract UchiToken {
         uint256 poolSupply,
         uint256 _timeRestrictionEnds
     ) {
-        owner = uchi[0];
-        
         for (uint256 i = 0; i < uchi.length; i++) {
             balanceOf[uchi[i]] = uchiSupply[i];
             whitelisted[uchi[i]] = true;
@@ -83,6 +89,8 @@ contract UchiToken {
         }
     }
     
+    /// - RESTRICTED ERC20 - ///
+    
     function approve(address to, uint256 amount) external returns (bool) {
         allowance[msg.sender][to] = amount;
         emit Approval(msg.sender, to, amount);
@@ -90,8 +98,8 @@ contract UchiToken {
     }
     
     function transfer(address to, uint256 amount) external returns (bool) {
-        if (timeRestricted) {require(block.timestamp >= timeRestrictionEnds, "!time");}
-        if (whiteListRestricted) {require(whitelisted[msg.sender] && whitelisted[to], "!whitelisted");}
+        if (timeRestricted) {require(block.timestamp >= timeRestrictionEnds, "!time");} // 
+        if (whiteListRestricted) {require(whitelisted[msg.sender] && whitelisted[to], "!whitelisted");} //
         balanceOf[msg.sender] -= amount;
         balanceOf[to] += amount;
         emit Transfer(msg.sender, to, amount);
@@ -99,14 +107,16 @@ contract UchiToken {
     }
     
     function transferFrom(address from, address to, uint256 amount) external returns (bool) {
-        if (timeRestricted) {require(block.timestamp >= timeRestrictionEnds, "!time");}
-        if (whiteListRestricted) {require(whitelisted[from] && whitelisted[to], "!whitelisted");}
+        if (timeRestricted) {require(block.timestamp >= timeRestrictionEnds, "!time");} // 
+        if (whiteListRestricted) {require(whitelisted[from] && whitelisted[to], "!whitelisted");} // 
         balanceOf[from] -= amount;
         balanceOf[to] += amount;
         allowance[from][msg.sender] -= amount;
         emit Transfer(from, to, amount);
         return true;
     }
+    
+    /// - GOVERNANCE - ///
     
     function updateGovernance(address _owner, bool _whiteListRestricted) external {
         require(msg.sender == owner, "!owner");
@@ -118,5 +128,46 @@ contract UchiToken {
     function updateWhitelist(address account, bool approved) external {
         require(msg.sender == owner, "!owner");
         whitelisted[account] = approved;
+    }
+}
+
+/// @notice Factory for Uchi Token creation.
+contract UchiTokenFactory {
+    event DeployUchiToken(address indexed uchiToken);
+    
+    function deployUchiToken(
+        address[] memory uchi,
+        address collateral,
+        string memory _name, 
+        string memory _symbol, 
+        uint256[] memory uchiSupply,
+        uint256 collateralSupply,
+        uint256 poolSupply,
+        uint256 _timeRestrictionEnds
+    ) external payable returns (UchiToken uchiToken) {
+        bytes32 bytecodeHash = keccak256(type(UchiToken).creationCode);
+        bytes32 data = keccak256(
+            abi.encodePacked(bytes1(0xff), address(this), msg.sender, bytecodeHash)
+        );
+        address preview = address(bytes20(data << 96));
+        
+        if (collateral == address(0)) {
+            (bool success, ) = preview.call{value: msg.value}("");
+            require(success, "!ethCall");
+        } else {
+            IERC20FWD(collateral).transferFrom(msg.sender, preview, collateralSupply);
+        }
+        
+        uchiToken = new UchiToken(
+            uchi,
+            collateral,
+            _name, 
+            _symbol, 
+            uchiSupply,
+            collateralSupply,
+            poolSupply,
+            _timeRestrictionEnds);
+        
+        emit DeployUchiToken(address(uchiToken));
     }
 }
