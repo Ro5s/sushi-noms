@@ -38,7 +38,6 @@ contract UchiToken {
     uint256 immutable public timeRestrictionEnds; 
     bool public timeRestricted;
     bool public whiteListRestricted;
-    bytes32 constant private pairCodeHash = 0xe18a34eb0e04b04f7a0ac29a6e80748dca96319b42c54d679cb821dca90c6303;
     
     mapping(address => uint256) public balanceOf;
     mapping(address => mapping(address => uint256)) public allowance;
