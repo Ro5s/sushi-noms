@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+/// SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity 0.6.12;
 
 /// @dev brief interface for moloch dao v2 erc20 token txs
@@ -10,7 +10,7 @@ interface IERC20 {
 }
 
 /// @dev brief interface for moloch dao v2 
-interface IMOLOCH { // brief interface for moloch dao v2
+interface IMOLOCH { 
     function submitProposal(
         address applicant,
         uint256 sharesRequested,
@@ -27,10 +27,9 @@ interface IMOLOCH { // brief interface for moloch dao v2
     function withdrawBalance(address token, uint256 amount) external;
 }
 
-/// @dev interface for sushi bar (`xSUSHI`) txs
+/// @dev brief interface for sushi bar (`xSUSHI`) entry
 interface ISushiBar { 
    function enter(uint256 _amount) external;
-   function leave(uint256 _share) external;
 }
 
 /// @dev helper for address type
@@ -111,8 +110,8 @@ contract ReentrancyGuard {
 
 /// @dev low-level caller, ETH holder, separate bank for moloch dao v2 - based on raid guild `Minion`
 contract SushiMinion is ReentrancyGuard {
-    address immutable sushiToken; // sushi token contract reference
-    IMOLOCH public moloch;
+    address immutable sushiToken; // internal sushi token contract reference
+    IMOLOCH public moloch; // parent moloch contract reference 
 
     mapping(uint256 => Action) public actions; // proposalId => Action
 
@@ -130,8 +129,8 @@ contract SushiMinion is ReentrancyGuard {
     constructor(address _moloch, address _sushiToken, address _xSushiToken, address _aave) public {
         moloch = IMOLOCH(_moloch);
         sushiToken = _sushiToken;
-        IERC20(_sushiToken).approve(_xSushiToken, uint256(-1)); // max approve sushi bar for sushi token entry
-        IERC20(_xSushiToken).approve(_aave, uint256(-1)); // max approve aave for deposit into aToken from underlying
+        IERC20(_sushiToken).approve(_xSushiToken, uint256(-1)); // max approve sushi bar for sushi token staking into xSushi
+        IERC20(_xSushiToken).approve(_aave, uint256(-1)); // max approve aave for deposit into aToken from underlying xSushi
     }
 
     function doWithdraw(address token, uint256 amount) external nonReentrant {
@@ -147,17 +146,15 @@ contract SushiMinion is ReentrancyGuard {
         // No calls to zero address allows us to check that proxy submitted
         // the proposal without getting the proposal struct from parent moloch
         require(actionTo != address(0), "invalid actionTo");
-        
-        address token = sushiToken;
 
         uint256 proposalId = moloch.submitProposal(
             address(this),
             0,
             0,
             0,
-            token,
+            sushiToken,
             0,
-            token,
+            sushiToken,
             details
         );
 
@@ -195,12 +192,11 @@ contract SushiMinion is ReentrancyGuard {
     receive() external payable {}
 }
 
-
 /*=====================================
 WELCOME TO THE POOL PARTY (飲み会)
-__Developed by Peeps Democracy & LexDAO
-__USE AT YOUR OWN RISK__
-====================================*/
+_Developed by Peeps Democracy & LexDAO
+__USE AT YOUR OWN RISK
+=====================================*/
 /// SushiNomikai is the coolest party in town. You come in with some Sushi and stake (xSushi) to vote on party matters, like what food gets served. You can leave anytime with your fair share of party food. 
 contract SushiNomikai is ReentrancyGuard {
     using SafeMath for uint256;
@@ -215,12 +211,12 @@ contract SushiNomikai is ReentrancyGuard {
     uint256 public proposalDeposit; // default = 10 ETH (~$1,000 worth of ETH at contract deployment)
     uint256 public dilutionBound; // default = 3 - maximum multiplier a YES voter will be obligated to pay in case of mass ragequit
     uint256 public processingReward; // default = 0.1 - amount of ETH to give to whoever processes a proposal
-    uint256 public summoningTime; // needed to determine the current period
-
-    address public depositToken; // deposit token contract reference; default = wETH
+    uint256 immutable summoningTime; // needed to determine the current period
+    
+    address payable public immutable sushiMinion; // sushi minion contract reference
+    address immutable depositToken; // deposit token contract reference; default = SUSHI
     address immutable sushiToken; // sushi token contract reference
     address immutable xSushiToken; // "sushi bar" xSushi token contract reference
-    address payable public immutable sushiMinion; // sushi minion contract reference
 
     // HARD-CODED LIMITS
     // These numbers are quite arbitrary; they are small enough to avoid overflows when doing calculations
@@ -228,7 +224,7 @@ contract SushiNomikai is ReentrancyGuard {
     uint256 constant MAX_VOTING_PERIOD_LENGTH = 10**18; // maximum length of voting period
     uint256 constant MAX_GRACE_PERIOD_LENGTH = 10**18; // maximum length of grace period
     uint256 constant MAX_DILUTION_BOUND = 10**18; // maximum dilution bound
-    uint256 constant MAX_NUMBER_OF_SHARES_AND_LOOT = 10**18; // maximum number of shares that can be minted
+    uint256 constant MAX_NUMBER_OF_SHARES_AND_LOOT = uint256(-1); // maximum number of shares that can be minted
     uint256 constant MAX_TOKEN_WHITELIST_COUNT = 400; // maximum number of whitelisted tokens
     uint256 constant MAX_TOKEN_GUILDBANK_COUNT = 200; // maximum number of tokens with non-zero balance in guildbank
 
@@ -236,7 +232,7 @@ contract SushiNomikai is ReentrancyGuard {
     // EVENTS
     // ***************
     event SummonComplete(address indexed summoner, address[] tokens, uint256 summoningTime, uint256 periodDuration, uint256 votingPeriodLength, uint256 gracePeriodLength, uint256 proposalDeposit, uint256 dilutionBound, uint256 processingReward);
-    event MakeDeposit(address indexed memberAddress, uint256 tributeOffered, uint256 indexed shares);
+    event MakeDeposit(address indexed memberAddress, uint256 tributeOffered, uint256 shares);
     event SubmitProposal(address indexed applicant, uint256 sharesRequested, uint256 lootRequested, uint256 tributeOffered, address tributeToken, uint256 paymentRequested, address paymentToken, string details, bool[6] flags, uint256 proposalId, address indexed delegateKey, address indexed memberAddress);
     event SponsorProposal(address indexed delegateKey, address indexed memberAddress, uint256 proposalId, uint256 proposalIndex, uint256 startingPeriod);
     event SubmitVote(uint256 proposalId, uint256 indexed proposalIndex, address indexed delegateKey, address indexed memberAddress, uint8 uintVote);
@@ -331,7 +327,6 @@ contract SushiNomikai is ReentrancyGuard {
         address[] memory _approvedTokens,
         address _sushiToken,
         address _xSushiToken,
-        address _aXSushiToken,
         address _aave,
         uint256 _periodDuration,
         uint256 _votingPeriodLength,
@@ -357,9 +352,6 @@ contract SushiNomikai is ReentrancyGuard {
         tokenWhitelist[_xSushiToken] = true;
         approvedTokens.push(_xSushiToken);
         
-        tokenWhitelist[_aXSushiToken] = true;
-        approvedTokens.push(_aXSushiToken);
-        
         // NOTE: move event up here, avoid stack too deep if too many approved tokens
         emit SummonComplete(_summoner, _approvedTokens, now, _periodDuration, _votingPeriodLength, _gracePeriodLength, _proposalDeposit, _dilutionBound, _processingReward);
 
@@ -370,7 +362,7 @@ contract SushiNomikai is ReentrancyGuard {
             approvedTokens.push(_approvedTokens[i]);
         }
         
-        IERC20(_sushiToken).approve(_xSushiToken, uint256(-1)); // max approve sushi bar for sushi token entry
+        IERC20(_sushiToken).approve(_xSushiToken, uint256(-1)); // max approve sushi bar for sushi token staking into xSushi
         
         SushiMinion minion = new SushiMinion(address(this), _sushiToken, _xSushiToken, _aave); // summon sushi minion contract 
         sushiMinion = address(minion); // record minion reference
@@ -398,13 +390,9 @@ contract SushiNomikai is ReentrancyGuard {
     function makeSushiDeposit(uint256 tributeOffered) external nonReentrant {
         require(IERC20(sushiToken).transferFrom(msg.sender, address(this), tributeOffered), "sushi tribute failed");
         
-        address xSushi = xSushiToken;
-        
-        uint256 startBalance = IERC20(xSushi).balanceOf(address(this));
-        
-        ISushiBar(xSushi).enter(tributeOffered);
-        
-        uint256 shares = IERC20(xSushi).balanceOf(address(this)) - startBalance / 10**18;
+        uint256 startBalance = IERC20(xSushiToken).balanceOf(address(this));
+        ISushiBar(xSushiToken).enter(tributeOffered);
+        uint256 shares = IERC20(xSushiToken).balanceOf(address(this)) - startBalance;
         
         if (!members[msg.sender].exists) {
             members[msg.sender] = Member(msg.sender, shares, 0, true, 0, 0);
@@ -416,30 +404,27 @@ contract SushiNomikai is ReentrancyGuard {
         require(totalShares + shares <= MAX_NUMBER_OF_SHARES_AND_LOOT, "too many shares requested");
         totalShares += shares;
         
-        unsafeAddToBalance(GUILD, xSushi, tributeOffered);
+        unsafeAddToBalance(GUILD, xSushiToken, shares);
         
         emit MakeDeposit(msg.sender, tributeOffered, shares);
     }
     
     function makeXSushiDeposit(uint256 tributeOffered) external nonReentrant {
-        address xSushi = xSushiToken;
-        uint256 shares = tributeOffered / 10**18;
-
-        require(IERC20(xSushi).transferFrom(msg.sender, address(this), tributeOffered), "xSushi tribute failed");
+        require(IERC20(xSushiToken).transferFrom(msg.sender, address(this), tributeOffered), "xSushi tribute failed");
         
         if (!members[msg.sender].exists) {
-            members[msg.sender] = Member(msg.sender, shares, 0, true, 0, 0);
+            members[msg.sender] = Member(msg.sender, tributeOffered, 0, true, 0, 0);
             memberAddressByDelegateKey[msg.sender] = msg.sender;
         } else {
-            members[msg.sender].shares += shares;
+            members[msg.sender].shares += tributeOffered;
         }
         
-        require(totalShares + shares <= MAX_NUMBER_OF_SHARES_AND_LOOT, "too many shares requested");
-        totalShares += shares;
+        require(totalShares + tributeOffered <= MAX_NUMBER_OF_SHARES_AND_LOOT, "too many shares requested");
+        totalShares += tributeOffered;
         
-        unsafeAddToBalance(GUILD, xSushi, tributeOffered);
+        unsafeAddToBalance(GUILD, xSushiToken, tributeOffered);
         
-        emit MakeDeposit(msg.sender, tributeOffered, shares);
+        emit MakeDeposit(msg.sender, tributeOffered, tributeOffered);
     }
 
     /*****************
@@ -585,7 +570,7 @@ contract SushiNomikai is ReentrancyGuard {
         emit SponsorProposal(msg.sender, memberAddress, proposalId, proposalQueue.length.sub(1), startingPeriod);
     }
 
-    // NOTE: In MolochV2 proposalIndex !== proposalId
+    // NOTE: In MolochV2 proposalIndex != proposalId
     function submitVote(uint256 proposalIndex, uint8 uintVote) external nonReentrant onlyDelegate {
         address memberAddress = memberAddressByDelegateKey[msg.sender];
         Member storage member = members[memberAddress];
