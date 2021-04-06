@@ -1,6 +1,35 @@
 /// SPDX-License-Identifier: GPL-3.0-or-later
 pragma solidity ^0.8.0;
 
+/// @notice Interface for SushiSwap pair creation and liquidity provision.
+interface ILAUNCHSUSHISWAP {
+    function approve(address spender, uint256 amount) external returns (bool);
+    
+    function transferFrom(address from, address to, uint256 amount) external returns (bool);
+    
+    function createPair(address tokenA, address tokenB) external returns (address pair);
+    
+    function addLiquidity(
+        address tokenA,
+        address tokenB,
+        uint amountADesired,
+        uint amountBDesired,
+        uint amountAMin,
+        uint amountBMin,
+        address to,
+        uint deadline
+    ) external returns (uint amountA, uint amountB, uint liquidity);
+    
+    function addLiquidityETH(
+        address token,
+        uint amountTokenDesired,
+        uint amountTokenMin,
+        uint amountETHMin,
+        address to,
+        uint deadline
+    ) external payable returns (uint amountToken, uint amountETH, uint liquidity);
+}
+
 /// @notice Simple restricted token with SushiSwap launch and minimal governance.
 contract UchiToken {
     ILAUNCHSUSHISWAP constant private sushiSwapFactory = ILAUNCHSUSHISWAP(0xc35DADB65012eC5796536bD9864eD8773aBc74C4);
@@ -101,35 +130,6 @@ contract UchiToken {
     }
 }
 
-/// @notice Interface for SushiSwap pair creation and liquidity provision.
-interface ILAUNCHSUSHISWAP {
-    function approve(address spender, uint256 amount) external returns (bool);
-    
-    function transferFrom(address from, address to, uint256 amount) external returns (bool);
-    
-    function createPair(address tokenA, address tokenB) external returns (address pair);
-    
-    function addLiquidity(
-        address tokenA,
-        address tokenB,
-        uint amountADesired,
-        uint amountBDesired,
-        uint amountAMin,
-        uint amountBMin,
-        address to,
-        uint deadline
-    ) external returns (uint amountA, uint amountB, uint liquidity);
-    
-    function addLiquidityETH(
-        address token,
-        uint amountTokenDesired,
-        uint amountTokenMin,
-        uint amountETHMin,
-        address to,
-        uint deadline
-    ) external payable returns (uint amountToken, uint amountETH, uint liquidity);
-}
-
 /// @notice Factory for Uchi Token creation.
 contract UchiTokenFactory {
     event DeployUchiToken(address indexed uchiToken);
@@ -153,7 +153,6 @@ contract UchiTokenFactory {
             uchiSupply);
         
         uchiToken.initMarket(collateral, _owner, collateralSupply, poolSupply);
-        
         emit DeployUchiToken(address(uchiToken));
     }
 }
