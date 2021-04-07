@@ -201,7 +201,7 @@ contract BoringBatchable is BaseBoringBatchable {
     }
 }
 
-/// @notice Contract that batches SUSHI staking into/from Aave xSUSHI (aXSUSHI) and Cream SUSHI/xSUSHI (crSUSHI/crXSUSHI), as well as general DeFi migrations into/from BentoBox vault (BENTO).
+/// @notice Contract that batches SUSHI staking and DeFi migrations.
 contract Inari is BoringBatchable {
     using BoringERC20 for IERC20;
     
