@@ -7,6 +7,7 @@
  ▐ █  █ █    █   █    ▐ 
    █   ██   █   ▀   
            ▀          */
+// Special thanks to Keno and Boring for reviewing early bridge patterns
 pragma solidity 0.6.12;
 pragma experimental ABIEncoderV2;
 /// @notice Interface for depositing into and withdrawing from SushiBar.
