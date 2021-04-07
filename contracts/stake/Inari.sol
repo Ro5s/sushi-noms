@@ -218,6 +218,7 @@ contract Inari is BoringBatchable {
     constructor() public {
         bento.registerProtocol(); // register this contract with BENTO
         sushiToken.approve(address(sushiBar), type(uint256).max); // max approve `sushiBar` spender to stake SUSHI into xSUSHI from this contract
+        sushiToken.approve(crSushiToken, type(uint256).max); // max approve `crSushiToken` spender to stake SUSHI into crSUSHI from this contract
         IERC20(sushiBar).approve(address(aave), type(uint256).max); // max approve `aave` spender to stake xSUSHI into aXSUSHI from this contract
         IERC20(sushiBar).approve(address(bento), type(uint256).max); // max approve `bento` spender to stake xSUSHI into BENTO from this contract
         IERC20(sushiBar).approve(crXSushiToken, type(uint256).max); // max approve `crXSushiToken` spender to stake xSUSHI into crXSUSHI from this contract
