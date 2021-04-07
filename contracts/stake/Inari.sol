@@ -201,7 +201,7 @@ contract BoringBatchable is BaseBoringBatchable {
     }
 }
 
-/// @notice Contract that batches SUSHI staking and DeFi migrations.
+/// @notice Contract that batches SUSHI staking and DeFi strategies.
 contract Inari is BoringBatchable {
     using BoringERC20 for IERC20;
     
