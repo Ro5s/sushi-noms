@@ -467,7 +467,7 @@ contract Inari is BoringBatchable {
     function unstakeSushiFromCream(uint256 amount) external {
         IERC20(crXSushiToken).safeTransferFrom(msg.sender, address(this), amount); // deposit `msg.sender` `crXSushiToken` `amount` into this contract
         ICompoundBridge(crXSushiToken).redeem(amount); // burn deposited `crXSushiToken` `amount` into xSUSHI
-        ISushiBarBridge(sushiBar).leave(amount); // burn resulting xSUSHI `amount` from `sushiBar` into SUSHI
+        ISushiBarBridge(sushiBar).leave(IERC20(sushiBar).balanceOf(address(this)); // burn resulting xSUSHI `amount` from `sushiBar` into SUSHI
         sushiToken.safeTransfer(msg.sender, sushiToken.balanceOf(address(this))); // transfer resulting SUSHI to `msg.sender`
     }
     
@@ -475,7 +475,7 @@ contract Inari is BoringBatchable {
     function unstakeSushiFromCreamTo(address to, uint256 amount) external {
         IERC20(crXSushiToken).safeTransferFrom(msg.sender, address(this), amount); // deposit `msg.sender` `crXSushiToken` `amount` into this contract
         ICompoundBridge(crXSushiToken).redeem(amount); // burn deposited `crXSushiToken` `amount` into xSUSHI
-        ISushiBarBridge(sushiBar).leave(amount); // burn resulting xSUSHI `amount` from `sushiBar` into SUSHI
+        ISushiBarBridge(sushiBar).leave(IERC20(sushiBar).balanceOf(address(this)); // burn resulting xSUSHI `amount` from `sushiBar` into SUSHI
         sushiToken.safeTransfer(to, sushiToken.balanceOf(address(this))); // transfer resulting SUSHI to `to`
     }
     
