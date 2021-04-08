@@ -375,7 +375,7 @@ contract Inari is BoringBatchable {
     /// @notice Migrate COMP/CREAM `cToken` underlying `amount` into BENTO by batching calls to `cToken` and `bento`.
     function compoundToBento(address cToken, uint256 cTokenAmount) external {
         IERC20(cToken).safeTransferFrom(msg.sender, address(this), cTokenAmount); // deposit `msg.sender` `cToken` `cTokenAmount` into this contract
-        ICompoundBridge(cToken).redeem(cTokenAmount); // burn deposited `cToken` from `aave` into `underlying`
+        ICompoundBridge(cToken).redeem(cTokenAmount); // burn deposited `cToken` into `underlying`
         IERC20 underlying = IERC20(ICompoundBridge(cToken).underlying()); // sanity check for `underlying` token
         bento.deposit(underlying, address(this), msg.sender, underlying.balanceOf(address(this)), 0); // stake resulting `underlying` into BENTO for `msg.sender`
     }
@@ -383,7 +383,7 @@ contract Inari is BoringBatchable {
     /// @notice Migrate COMP/CREAM `cToken` underlying `amount` into BENTO for benefit of `to` by batching calls to `cToken` and `bento`.
     function compoundToBentoTo(address cToken, address to, uint256 cTokenAmount) external {
         IERC20(cToken).safeTransferFrom(msg.sender, address(this), cTokenAmount); // deposit `msg.sender` `cToken` `cTokenAmount` into this contract
-        ICompoundBridge(cToken).redeem(cTokenAmount); // burn deposited `cToken` from `aave` into `underlying`
+        ICompoundBridge(cToken).redeem(cTokenAmount); // burn deposited `cToken` into `underlying`
         IERC20 underlying = IERC20(ICompoundBridge(cToken).underlying()); // sanity check for `underlying` token
         bento.deposit(underlying, address(this), to, underlying.balanceOf(address(this)), 0); // stake resulting `underlying` into BENTO for `to`
     }
