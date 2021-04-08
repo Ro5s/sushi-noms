@@ -396,7 +396,7 @@ contract Inari is BoringBatchable {
         IERC20 underlying = IERC20(ICompoundBridge(cToken).underlying()); // sanity check for `underlying` token
         bento.withdraw(underlying, msg.sender, address(this), underlyingAmount, 0); // withdraw `underlyingAmount` of `underlying` from BENTO into this contract
         ICompoundBridge(cToken).mint(underlyingAmount); // stake `underlying` into `cToken`
-        IERC20(cToken).safeTransfer(msg.sender, IERC20(cToken).balanceOf(address(this))); // transfer resulting cToken to `msg.sender`
+        IERC20(cToken).safeTransfer(msg.sender, IERC20(cToken).balanceOf(address(this))); // transfer resulting `cToken` to `msg.sender`
     }
     
     /// @notice Migrate `cToken` `underlyingAmount` from BENTO into COMP/CREAM for benefit of `to` by batching calls to `bento` and `cToken`.
@@ -404,7 +404,7 @@ contract Inari is BoringBatchable {
         IERC20 underlying = IERC20(ICompoundBridge(cToken).underlying()); // sanity check for `underlying` token
         bento.withdraw(underlying, msg.sender, address(this), underlyingAmount, 0); // withdraw `underlyingAmount` of `underlying` from BENTO into this contract
         ICompoundBridge(cToken).mint(underlyingAmount); // stake `underlying` into `cToken`
-        IERC20(cToken).safeTransfer(to, IERC20(cToken).balanceOf(address(this))); // transfer resulting cToken to `msg.sender`
+        IERC20(cToken).safeTransfer(to, IERC20(cToken).balanceOf(address(this))); // transfer resulting `cToken` to `to`
     }
     
     /**********************
