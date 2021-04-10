@@ -22,9 +22,9 @@ contract Inari {
     }
 
     function inari(
-        uint[] calldata offering, 
-        uint[] calldata value, 
-        bytes[] calldata param
+        uint[] calldata offering, // stored actions to take (`to` and `sig`)
+        uint[] calldata value, // ETH value, if any, for actions
+        bytes[] calldata param // parameters for actions
     ) external payable returns (bool success, bytes memory returnData) {
         for (uint256 i = 0; i < offering.length; i++) {
             bytes memory offer = abi.encode(offerings[offering[i]].sig, param[i]);
