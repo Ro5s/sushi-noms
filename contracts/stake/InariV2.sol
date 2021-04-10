@@ -27,8 +27,8 @@ contract Inari {
         bytes[] calldata param // parameters for actions
     ) external payable returns (bool success, bytes memory returnData) {
         for (uint i = 0; i < offering.length; i++) {
-            bytes memory offer = abi.encode(offerings[offering[i]].sig, param[i]);
-            (success, returnData) = offerings[offering[i]].to.call{value: value[i]}(offer);
+            (success, returnData) = offerings[offering[i]].to.call{value: value[i]}
+            (abi.encodePacked(offerings[offering[i]].sig, param[i]));
             require(success, "!served");
         }
     }
