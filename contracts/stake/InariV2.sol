@@ -12,24 +12,32 @@ pragma solidity 0.6.12;
 pragma experimental ABIEncoderV2;
 /// @notice Inari registers and batches contract calls for crafty strategies.
 contract Inari {
-    address public dao = msg.sender;
-    uint public offerings;
-    mapping(uint => Kitsune) private kitsune;
+    address public dao = msg.sender; // initialize governance with Inari summoner
+    uint public offerings; // strategies offered into Kitsune and `inari()` calls
+    mapping(uint => Kitsune) kitsune; // internal Kitsune mapping to `offerings`
     
-    event Zushi(address[] to, bytes4[] sig, uint indexed offering);
+    event Zushi(address server, address[] to, bytes4[] sig, bytes32 descr, uint indexed offering);
     event Torii(address[] token, address[] indexed approveTo);
     event Inori(address indexed dao, uint indexed kit, bool zenko);
     
-    /// @notice Holds strategies and minimal governance (`summoner` for potential rewards / `zenko` to flag status)
+    /// @notice Holds Inari strategies with minimal `zenko` governance.
     struct Kitsune {
-        address summoner;
         address[] to;
         bytes4[] sig;
+        bytes32 descr;
         bool zenko;
     }
     
+    /// @notice Inspect a Kitsune offering (`kit`).
+    function offering(uint kit) external view returns (address[] memory to, bytes4[] memory sig, string memory descr, bool zenko) {
+        to = kitsune[kit].to;
+        sig = kitsune[kit].sig;
+        descr = string(abi.encodePacked(kitsune[kit].descr));
+        zenko = kitsune[kit].zenko;
+    }
+    
     /// @notice Batch Inari strategies into single call.
-    /// @param kit Kitsune strategy (`to` / `sig`) 'offerings' ID.
+    /// @param kit Kitsune strategy 'offerings' ID.
     /// @param value ETH value (if any) for call.
     /// @param param Parameters for call data after Kitsune `sig`.
     function inari(uint[] calldata kit, uint[] calldata value, bytes[] calldata param) 
@@ -41,22 +49,33 @@ contract Inari {
         }
     }
     
-    /// @notice Offer Kitsune strategy that can be called by `inari()`. If caller is `dao`, strategy is `zenko`.
-    /// @param to The contract(s) to be called in strategy. 
-    /// @param sig  The function signature(s) involved (completed by `inari()` `param`).
-    function zushi(address[] calldata to, bytes4[] calldata sig) external { 
-        uint offering = offerings;
-        kitsune[offering] = Kitsune(msg.sender, to, sig, false);
-        if (msg.sender == dao) {
-            kitsune[offering].zenko = true;
+    /// @notice Batch Inari strategies into single call with `zenko` check.
+    /// @param kit Kitsune strategy 'offerings' ID.
+    /// @param value ETH value (if any) for call.
+    /// @param param Parameters for call data after Kitsune `sig`.
+    function zenko(uint[] calldata kit, uint[] calldata value, bytes[] calldata param) 
+        external payable returns (bool success, bytes memory returnData) {
+        for (uint i = 0; i < kit.length; i++) {
+            require(kitsune[kit[i]].zenko, "!zenko");
+            (success, returnData) = kitsune[kit[i]].to[i].call{value: value[i]}
+            (abi.encodePacked(kitsune[kit[i]].sig[i], param[i]));
+            require(success, '!served');
         }
+    }
+    
+    /// @notice Offer Kitsune strategy that can be called by `inari()`.
+    /// @param to The contract(s) to be called in strategy. 
+    /// @param sig The function signature(s) involved (completed by `inari()` `param`).
+    function zushi(address[] calldata to, bytes4[] calldata sig, bytes32 descr) external { 
+        uint kit = offerings;
+        kitsune[kit] = Kitsune(to, sig, descr, false);
         offerings++;
-        emit Zushi(to, sig, offering++);
+        emit Zushi(msg.sender, to, sig, descr, kit);
     }
 
     /// @notice Approve token for Inari to spend among contracts.
     /// @param token ERC20 contract(s) to register approval for.
-    /// @param approveTo Spender contract(s) to pull `token` in an `inari()` call.
+    /// @param approveTo Spender contract(s) to pull `token` in `inari()` calls.
     function torii(address[] calldata token, address[] calldata approveTo) external returns (bool success) {
         for (uint i = 0; i < token.length; i++) {
             emit Torii(token, approveTo);
@@ -65,13 +84,13 @@ contract Inari {
     }
     
     /// @notice Update Inari `dao` and Kitsune `zenko` status.
-    /// @param dao_ Address to grant governance.
-    /// @param kit Kitsune strategy (`to` / `sig`) 'offerings' ID.
-    /// @param zenko `kit` approval. 
-    function inori(address dao_, uint kit, bool zenko) external {
+    /// @param dao_ Address to grant Kitsune governance.
+    /// @param kit Kitsune strategy 'offerings' ID.
+    /// @param zen `kit` approval. 
+    function inori(address dao_, uint kit, bool zen) external {
         require(msg.sender == dao, "!dao");
         dao = dao_;
-        kitsune[kit].zenko = zenko;
-        emit Inori(dao_, kit, zenko);
+        kitsune[kit].zenko = zen;
+        emit Inori(dao_, kit, zen);
     }
 }
