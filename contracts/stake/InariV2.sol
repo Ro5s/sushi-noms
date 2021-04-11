@@ -36,6 +36,16 @@ contract Inari {
         zenko = kitsune[kit].zenko;
     }
     
+    /// @notice Offer Kitsune strategy that can be called by `inari()`.
+    /// @param to The contract(s) to be called in strategy. 
+    /// @param sig The function signature(s) involved (completed by `inari()` `param`).
+    function zushi(address[] calldata to, bytes4[] calldata sig, bytes32 descr) external { 
+        uint kit = offerings;
+        kitsune[kit] = Kitsune(to, sig, descr, false);
+        offerings++;
+        emit Zushi(msg.sender, to, sig, descr, kit);
+    }
+    
     /// @notice Batch Inari strategies into single call.
     /// @param kit Kitsune strategy 'offerings' ID.
     /// @param value ETH value (if any) for call.
@@ -61,16 +71,6 @@ contract Inari {
             (abi.encodePacked(kitsune[kit[i]].sig[i], param[i]));
             require(success, '!served');
         }
-    }
-    
-    /// @notice Offer Kitsune strategy that can be called by `inari()`.
-    /// @param to The contract(s) to be called in strategy. 
-    /// @param sig The function signature(s) involved (completed by `inari()` `param`).
-    function zushi(address[] calldata to, bytes4[] calldata sig, bytes32 descr) external { 
-        uint kit = offerings;
-        kitsune[kit] = Kitsune(to, sig, descr, false);
-        offerings++;
-        emit Zushi(msg.sender, to, sig, descr, kit);
     }
 
     /// @notice Approve token for Inari to spend among contracts.
