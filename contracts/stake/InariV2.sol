@@ -174,9 +174,9 @@ contract Inari is BoringBatchableWithDai {
     uint public offerings; // strategies offered into Kitsune and `inari()` calls
     mapping(uint => Kitsune) kitsune; // internal Kitsune mapping to `offerings`
     
-    event Zushi(address indexed server, address[] to, bytes4[] sig, bytes32 descr, uint indexed offering);
-    event Torii(IERC20[] token, address[] approveTo);
-    event Inori(address indexed dao, uint indexed kit, bool zenko);
+    event MakeOffering(address indexed server, address[] to, bytes4[] sig, bytes32 descr, uint indexed offering);
+    event Bridge(IERC20[] token, address[] approveTo);
+    event Govern(address indexed dao, uint indexed kit, bool zenko);
     
     /// @notice Stores Inari strategies with `zenko` flagged by `dao`.
     struct Kitsune {
@@ -237,7 +237,7 @@ contract Inari is BoringBatchableWithDai {
         uint kit = offerings;
         kitsune[kit] = Kitsune(to, sig, descr, false);
         offerings++;
-        emit Zushi(msg.sender, to, sig, descr, kit);
+        emit MakeOffering(msg.sender, to, sig, descr, kit);
     }
     
     /*********
@@ -249,7 +249,7 @@ contract Inari is BoringBatchableWithDai {
     function bridge(IERC20[] calldata token, address[] calldata approveTo) external {
         for (uint i = 0; i < token.length; i++) {
             token[i].approve(approveTo[i], type(uint).max);
-            emit Torii(token, approveTo);
+            emit Bridge(token, approveTo);
         }
     }
     
@@ -261,6 +261,6 @@ contract Inari is BoringBatchableWithDai {
         require(msg.sender == dao, "!dao");
         dao = dao_;
         kitsune[kit].zenko = zen;
-        emit Inori(dao_, kit, zen);
+        emit Govern(dao_, kit, zen);
     }
 }
