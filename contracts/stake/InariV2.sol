@@ -20,6 +20,7 @@ contract Inari {
     event Torii(address[] token, address[] indexed approveTo);
     event Inori(address indexed dao, uint indexed kit, bool zenko);
     
+    /// @notice Holds strategies and minimal governance (`summoner` for potential rewards / `zenko` to flag status)
     struct Kitsune {
         address summoner;
         address[] to;
