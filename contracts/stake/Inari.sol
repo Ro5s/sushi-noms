@@ -7,7 +7,7 @@
  ▐ █  █ █    █   █    ▐ 
    █   ██   █   ▀   
            ▀          */
-/// Special thanks to Keno and Boring for reviewing early bridge patterns.
+/// Special thanks to Keno, Boring and Gonpachi for review and continued inspiration.
 pragma solidity 0.6.12;
 pragma experimental ABIEncoderV2;
 
@@ -45,12 +45,6 @@ library BoringMath {
     }
 }
 
-/// @notice Interface for depositing into and withdrawing from SushiBar.
-interface ISushiBarBridge { 
-    function enter(uint256 amount) external;
-    function leave(uint256 share) external;
-}
-
 /// @notice Interface for depositing into and withdrawing from Aave lending pool.
 interface IAaveBridge {
     function UNDERLYING_ASSET_ADDRESS() external view returns (address);
@@ -71,6 +65,8 @@ interface IAaveBridge {
 
 /// @notice Interface for depositing into and withdrawing from BentoBox vault.
 interface IBentoBridge {
+    function balanceOf(IERC20, address) external view returns (uint256);
+    
     function registerProtocol() external;
 
     function deposit( 
@@ -109,6 +105,12 @@ interface IDaiPermit {
         bytes32 r,
         bytes32 s
     ) external;
+}
+
+/// @notice Interface for depositing into and withdrawing from SushiBar.
+interface ISushiBarBridge { 
+    function enter(uint256 amount) external;
+    function leave(uint256 share) external;
 }
 
 /// @notice Interface for SushiSwap.
@@ -224,7 +226,7 @@ contract BaseBoringBatchable {
     }
 }
 
-/// @notice Extends `BoringBatchable` with Dai `permit()`.
+/// @notice Extends `BoringBatchable` with DAI `permit()`.
 contract BoringBatchableWithDai is BaseBoringBatchable {
     address constant dai = 0x6B175474E89094C44Da98b954EedeAC495271d0F; // DAI token contract
     
@@ -261,7 +263,7 @@ contract BoringBatchableWithDai is BaseBoringBatchable {
     }
 }
 
-/// @notice Contract that batches SUSHI staking and DeFi strategies.
+/// @notice Contract that batches SUSHI staking and DeFi strategies - V1.
 contract Inari is BoringBatchableWithDai {
     using BoringMath for uint256;
     using BoringERC20 for IERC20;
@@ -273,11 +275,11 @@ contract Inari is BoringBatchableWithDai {
     IBentoBridge constant bento = IBentoBridge(0xF5BCE5077908a1b7370B9ae04AdC565EBd643966); // BENTO vault contract
     address constant crSushiToken = 0x338286C0BC081891A4Bda39C7667ae150bf5D206; // crSUSHI staking contract for SUSHI
     address constant crXSushiToken = 0x228619CCa194Fbe3Ebeb2f835eC1eA5080DaFbb2; // crXSUSHI staking contract for xSUSHI
-    address constant wETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+    address constant wETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2; // ETH wrapper contract (v9)
     address constant sushiSwapFactory = 0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac; // SushiSwap factory contract
-    ISushiSwap constant sushiSwapSushiETHPair = ISushiSwap(0x795065dCc9f64b5614C407a6EFDC400DA6221FB0); // 
+    ISushiSwap constant sushiSwapSushiETHPair = ISushiSwap(0x795065dCc9f64b5614C407a6EFDC400DA6221FB0); // SUSHI/ETH pair on SushiSwap
     bytes32 constant pairCodeHash = 0xe18a34eb0e04b04f7a0ac29a6e80748dca96319b42c54d679cb821dca90c6303; // SushiSwap pair code hash
-    
+
     /// @notice Initialize this Inari contract and core SUSHI strategies.
     constructor() public {
         bento.registerProtocol(); // register this contract with BENTO
@@ -287,24 +289,49 @@ contract Inari is BoringBatchableWithDai {
         IERC20(sushiBar).approve(address(bento), type(uint256).max); // max approve `bento` spender to stake xSUSHI into BENTO from this contract
         IERC20(sushiBar).approve(crXSushiToken, type(uint256).max); // max approve `crXSushiToken` spender to stake xSUSHI into crXSUSHI from this contract
         IERC20(dai).approve(address(bento), type(uint256).max); // max approve `bento` spender to pull DAI into BENTO from this contract
-        IERC20(wETH).approve(address(sushiSwapSushiETHPair), type(uint256).max); // max approve `sushiSwapSushiETHPair` spender to pull wETH to swap from this contract
     }
-    
+
     /// @notice Helper function to approve this contract to spend and bridge more tokens among DeFi contracts.
-    function approveTokenBridge(IERC20[] calldata underlying, address[] calldata cToken) external {
+    function bridgeABC(IERC20[] calldata underlying, address[] calldata cToken) external {
         for (uint256 i = 0; i < underlying.length; i++) {
             underlying[i].approve(address(aave), type(uint256).max); // max approve `aave` spender to pull `underlying` from this contract
             underlying[i].approve(address(bento), type(uint256).max); // max approve `bento` spender to pull `underlying` from this contract
-            underlying[i].approve(cToken[i], type(uint256).max); // max approve `cToken` spender to pull `underlying` from this contract
+            underlying[i].approve(cToken[i], type(uint256).max); // max approve `cToken` spender to pull `underlying` from this contract (also serves as generalized approval bridge)
         }
     }
+
+    /************
+    SUSHI HELPERS 
+    ************/
+    /// @notice Stake SUSHI `amount` into xSushi for benefit of `to` by call to `sushiBar`.
+    function stakeSushi(address to, uint256 amount) external {
+        sushiToken.safeTransferFrom(msg.sender, address(this), amount); // deposit `msg.sender` SUSHI `amount` into this contract
+        ISushiBarBridge(sushiBar).enter(amount); // stake deposited SUSHI into `sushiBar` xSUSHI
+        IERC20(sushiBar).safeTransfer(to, IERC20(sushiBar).balanceOf(address(this))); // transfer resulting xSUSHI to `to`
+    }
     
-    /// @notice ETH deposit function for `batch` into strategies.
-    function depositETH() external payable {}
+    /// @notice Stake SUSHI local balance into xSushi for benefit of `to` by call to `sushiBar`.
+    function stakeSushiBalance(address to) external {
+        ISushiBarBridge(sushiBar).enter(sushiToken.balanceOf(address(this))); // stake local SUSHI into `sushiBar` xSUSHI
+        IERC20(sushiBar).safeTransfer(to, IERC20(sushiBar).balanceOf(address(this))); // transfer resulting xSUSHI to `to`
+    }
     
-    /// @notice Generalized token deposit function for `batch` into strategies. 
+    /**********
+    TKN HELPERS 
+    **********/
+    /// @notice Token deposit function for `batch()` into strategies. 
     function depositToken(IERC20 token, uint256 amount) external {
-        IERC20(token).safeTransferFrom(msg.sender, address(this), amount); // deposit `msg.sender` `token` `amount` into this contract
+        IERC20(token).safeTransferFrom(msg.sender, address(this), amount); 
+    }
+
+    /// @notice Token withdraw function for `batch()` into strategies. 
+    function withdrawToken(IERC20 token, address to, uint256 amount) external {
+        IERC20(token).safeTransfer(to, amount); 
+    }
+    
+    /// @notice Token local balance withdraw function for `batch()` into strategies. 
+    function withdrawTokenBalance(IERC20 token, address to) external {
+        IERC20(token).safeTransfer(to, token.balanceOf(address(this))); 
     }
 /*
 ██   ██       ▄   ▄███▄   
@@ -314,19 +341,32 @@ contract Inari is BoringBatchableWithDai {
    █    █   █  █  ▀███▀   
   █    █     █▐           
  ▀    ▀      ▐         */
+    
+    /***********
+    AAVE HELPERS 
+    ***********/
+    function toAave(address underlying, address to, uint256 amount) external {
+        aave.deposit(underlying, amount, to, 0); 
+    }
+
+    function balanceToAave(address underlying, address to) external {
+        aave.deposit(underlying, IERC20(underlying).balanceOf(address(this)), to, 0); 
+    }
+    
+    function fromAave(address underlying, address to, uint256 amount) external {
+        aave.withdraw(underlying, amount, to); 
+    }
+    
+    function balanceFromAave(address aToken, address to) external {
+        address underlying = IAaveBridge(aToken).UNDERLYING_ASSET_ADDRESS(); // sanity check for `underlying` token
+        aave.withdraw(underlying, IERC20(aToken).balanceOf(address(this)), to); 
+    }
+    
     /**************************
     AAVE -> UNDERLYING -> BENTO 
     **************************/
-    /// @notice Migrate AAVE `aToken` underlying `amount` into BENTO by batching calls to `aave` and `bento`.
-    function aaveToBento(address aToken, uint256 amount) external {
-        IERC20(aToken).safeTransferFrom(msg.sender, address(this), amount); // deposit `msg.sender` `aToken` `amount` into this contract
-        address underlying = IAaveBridge(aToken).UNDERLYING_ASSET_ADDRESS(); // sanity check for `underlying` token
-        aave.withdraw(underlying, amount, address(this)); // burn deposited `aToken` from `aave` into `underlying`
-        bento.deposit(IERC20(underlying), address(this), msg.sender, amount, 0); // stake `underlying` into BENTO for `msg.sender`
-    }
-    
     /// @notice Migrate AAVE `aToken` underlying `amount` into BENTO for benefit of `to` by batching calls to `aave` and `bento`.
-    function aaveToBentoTo(address aToken, address to, uint256 amount) external {
+    function aaveToBento(address aToken, address to, uint256 amount) external {
         IERC20(aToken).safeTransferFrom(msg.sender, address(this), amount); // deposit `msg.sender` `aToken` `amount` into this contract
         address underlying = IAaveBridge(aToken).UNDERLYING_ASSET_ADDRESS(); // sanity check for `underlying` token
         aave.withdraw(underlying, amount, address(this)); // burn deposited `aToken` from `aave` into `underlying`
@@ -336,14 +376,8 @@ contract Inari is BoringBatchableWithDai {
     /**************************
     BENTO -> UNDERLYING -> AAVE 
     **************************/
-    /// @notice Migrate `underlying` `amount` from BENTO into AAVE by batching calls to `bento` and `aave`.
-    function bentoToAave(IERC20 underlying, uint256 amount) external {
-        bento.withdraw(underlying, msg.sender, address(this), amount, 0); // withdraw `amount` of `underlying` from BENTO into this contract
-        aave.deposit(address(underlying), amount, msg.sender, 0); // stake `underlying` into `aave` for `msg.sender`
-    }
-    
     /// @notice Migrate `underlying` `amount` from BENTO into AAVE for benefit of `to` by batching calls to `bento` and `aave`.
-    function bentoToAaveTo(IERC20 underlying, address to, uint256 amount) external {
+    function bentoToAave(IERC20 underlying, address to, uint256 amount) external {
         bento.withdraw(underlying, msg.sender, address(this), amount, 0); // withdraw `amount` of `underlying` from BENTO into this contract
         aave.deposit(address(underlying), amount, to, 0); // stake `underlying` into `aave` for `to`
     }
@@ -351,17 +385,8 @@ contract Inari is BoringBatchableWithDai {
     /*************************
     AAVE -> UNDERLYING -> COMP 
     *************************/
-    /// @notice Migrate AAVE `aToken` underlying `amount` into COMP/CREAM `cToken` by batching calls to `aave` and `cToken`.
-    function aaveToCompound(address aToken, address cToken, uint256 amount) external {
-        IERC20(aToken).safeTransferFrom(msg.sender, address(this), amount); // deposit `msg.sender` `aToken` `amount` into this contract
-        address underlying = IAaveBridge(aToken).UNDERLYING_ASSET_ADDRESS(); // sanity check for `underlying` token
-        aave.withdraw(underlying, amount, address(this)); // burn deposited `aToken` from `aave` into `underlying`
-        ICompoundBridge(cToken).mint(amount); // stake `underlying` into `cToken`
-        IERC20(cToken).safeTransfer(msg.sender, IERC20(cToken).balanceOf(address(this))); // transfer resulting `cToken` to `msg.sender`
-    }
-    
     /// @notice Migrate AAVE `aToken` underlying `amount` into COMP/CREAM `cToken` for benefit of `to` by batching calls to `aave` and `cToken`.
-    function aaveToCompoundTo(address aToken, address cToken, address to, uint256 amount) external {
+    function aaveToCompound(address aToken, address cToken, address to, uint256 amount) external {
         IERC20(aToken).safeTransferFrom(msg.sender, address(this), amount); // deposit `msg.sender` `aToken` `amount` into this contract
         address underlying = IAaveBridge(aToken).UNDERLYING_ASSET_ADDRESS(); // sanity check for `underlying` token
         aave.withdraw(underlying, amount, address(this)); // burn deposited `aToken` from `aave` into `underlying`
@@ -372,34 +397,19 @@ contract Inari is BoringBatchableWithDai {
     /*************************
     COMP -> UNDERLYING -> AAVE 
     *************************/
-    /// @notice Migrate COMP/CREAM `cToken` underlying `amount` into AAVE by batching calls to `cToken` and `aave`.
-    function compoundToAave(address cToken, uint256 amount) external {
-        IERC20(cToken).safeTransferFrom(msg.sender, address(this), amount); // deposit `msg.sender` `cToken` `amount` into this contract
-        ICompoundBridge(cToken).redeem(amount); // burn deposited `cToken` into `underlying`
-        IERC20 underlying = IERC20(ICompoundBridge(cToken).underlying()); // sanity check for `underlying` token
-        aave.deposit(address(underlying), underlying.balanceOf(address(this)), msg.sender, 0); // stake `underlying` into `aave` for `msg.sender`
-    }
-    
     /// @notice Migrate COMP/CREAM `cToken` underlying `amount` into AAVE for benefit of `to` by batching calls to `cToken` and `aave`.
-    function compoundToAaveTo(address cToken, uint256 amount) external {
+    function compoundToAave(address cToken, address to, uint256 amount) external {
         IERC20(cToken).safeTransferFrom(msg.sender, address(this), amount); // deposit `msg.sender` `cToken` `amount` into this contract
         ICompoundBridge(cToken).redeem(amount); // burn deposited `cToken` into `underlying`
-        IERC20 underlying = IERC20(ICompoundBridge(cToken).underlying()); // sanity check for `underlying` token
-        aave.deposit(address(underlying), underlying.balanceOf(address(this)), msg.sender, 0); // stake `underlying` into `aave` for `to`
+        address underlying = ICompoundBridge(cToken).underlying(); // sanity check for `underlying` token
+        aave.deposit(underlying, IERC20(underlying).balanceOf(address(this)), to, 0); // stake resulting `underlying` into `aave` for `to`
     }
     
     /**********************
     SUSHI -> XSUSHI -> AAVE 
     **********************/
-    /// @notice Stake SUSHI `amount` into aXSUSHI by batching calls to `sushiBar` and `aave`.
-    function stakeSushiToAave(uint256 amount) external {
-        sushiToken.safeTransferFrom(msg.sender, address(this), amount); // deposit `msg.sender` SUSHI `amount` into this contract
-        ISushiBarBridge(sushiBar).enter(amount); // stake deposited SUSHI into `sushiBar` xSUSHI
-        aave.deposit(sushiBar, IERC20(sushiBar).balanceOf(address(this)), msg.sender, 0); // stake resulting xSUSHI into `aave` aXSUSHI for `msg.sender`
-    }
-    
     /// @notice Stake SUSHI `amount` into aXSUSHI for benefit of `to` by batching calls to `sushiBar` and `aave`.
-    function stakeSushiToAaveTo(address to, uint256 amount) external {
+    function stakeSushiToAave(address to, uint256 amount) external {
         sushiToken.safeTransferFrom(msg.sender, address(this), amount); // deposit `msg.sender` SUSHI `amount` into this contract
         ISushiBarBridge(sushiBar).enter(amount); // stake deposited SUSHI into `sushiBar` xSUSHI
         aave.deposit(sushiBar, IERC20(sushiBar).balanceOf(address(this)), to, 0); // stake resulting xSUSHI into `aave` aXSUSHI for `to`
@@ -408,16 +418,8 @@ contract Inari is BoringBatchableWithDai {
     /**********************
     AAVE -> XSUSHI -> SUSHI 
     **********************/
-    /// @notice Unstake aXSUSHI `amount` into SUSHI by batching calls to `aave` and `sushiBar`.
-    function unstakeSushiFromAave(uint256 amount) external {
-        aaveSushiToken.safeTransferFrom(msg.sender, address(this), amount); // deposit `msg.sender` aXSUSHI `amount` into this contract
-        aave.withdraw(sushiBar, amount, address(this)); // burn deposited aXSUSHI from `aave` into xSUSHI
-        ISushiBarBridge(sushiBar).leave(amount); // burn resulting xSUSHI from `sushiBar` into SUSHI
-        sushiToken.safeTransfer(msg.sender, sushiToken.balanceOf(address(this))); // transfer resulting SUSHI to `msg.sender`
-    }
-    
     /// @notice Unstake aXSUSHI `amount` into SUSHI for benefit of `to` by batching calls to `aave` and `sushiBar`.
-    function unstakeSushiFromAaveTo(address to, uint256 amount) external {
+    function unstakeSushiFromAave(address to, uint256 amount) external {
         aaveSushiToken.safeTransferFrom(msg.sender, address(this), amount); // deposit `msg.sender` aXSUSHI `amount` into this contract
         aave.withdraw(sushiBar, amount, address(this)); // burn deposited aXSUSHI from `aave` into xSUSHI
         ISushiBarBridge(sushiBar).leave(amount); // burn resulting xSUSHI from `sushiBar` into SUSHI
@@ -430,28 +432,40 @@ contract Inari is BoringBatchableWithDai {
 █  ▄▀ █▄   ▄▀ █ █  █   █     ▀████ 
 ███   ▀███▀   █  █ █  ▀            
               █   ██            */ 
-    /// @notice Helper function to `permit()` this contract to deposit `dai` into `bento`.
+    /// @notice Helper function to `permit()` this contract to deposit `dai` into `bento` for benefit of `to`.
     function daiToBentoWithPermit(
-        uint256 amount, uint256 nonce, uint256 deadline,
+        address to, uint256 amount, uint256 nonce, uint256 expiry,
         uint8 v, bytes32 r, bytes32 s
     ) external {
-        IDaiPermit(dai).permit(msg.sender, address(this), nonce, deadline, true, v, r, s); // `permit()` this contract to spend `msg.sender` `dai` `amount`
+        IDaiPermit(dai).permit(msg.sender, address(this), nonce, expiry, true, v, r, s); // `permit()` this contract to spend `msg.sender` `dai`
         IERC20(dai).safeTransferFrom(msg.sender, address(this), amount); // pull `dai` `amount` into this contract
-        bento.deposit(IERC20(dai), address(this), msg.sender, amount, 0); // stake `dai` into BENTO for `msg.sender`
+        bento.deposit(IERC20(dai), address(this), to, amount, 0); // stake `dai` into BENTO for `to`
+    }
+    
+    /************
+    BENTO HELPERS 
+    ************/
+    function toBento(IERC20 token, address to, uint256 amount) external {
+        bento.deposit(token, address(this), to, amount, 0); 
+    }
+
+    function balanceToBento(IERC20 token, address to) external {
+        bento.deposit(token, address(this), to, token.balanceOf(address(this)), 0); 
+    }
+    
+    function fromBento(IERC20 token, address to, uint256 amount) external {
+        bento.withdraw(token, msg.sender, to, amount, 0); 
+    }
+    
+    function balanceFromBento(IERC20 token, address to) external {
+        bento.withdraw(token, msg.sender, to, bento.balanceOf(token, msg.sender), 0); 
     }
 
     /***********************
     SUSHI -> XSUSHI -> BENTO 
     ***********************/
-    /// @notice Stake SUSHI `amount` into BENTO xSUSHI by batching calls to `sushiBar` and `bento`.
-    function stakeSushiToBento(uint256 amount) external {
-        sushiToken.safeTransferFrom(msg.sender, address(this), amount); // deposit `msg.sender` SUSHI `amount` into this contract
-        ISushiBarBridge(sushiBar).enter(amount); // stake deposited SUSHI into `sushiBar` xSUSHI
-        bento.deposit(IERC20(sushiBar), address(this), msg.sender, IERC20(sushiBar).balanceOf(address(this)), 0); // stake resulting xSUSHI into BENTO for `msg.sender`
-    }
-    
     /// @notice Stake SUSHI `amount` into BENTO xSUSHI for benefit of `to` by batching calls to `sushiBar` and `bento`.
-    function stakeSushiToBentoTo(address to, uint256 amount) external {
+    function stakeSushiToBento(address to, uint256 amount) external {
         sushiToken.safeTransferFrom(msg.sender, address(this), amount); // deposit `msg.sender` SUSHI `amount` into this contract
         ISushiBarBridge(sushiBar).enter(amount); // stake deposited SUSHI into `sushiBar` xSUSHI
         bento.deposit(IERC20(sushiBar), address(this), to, IERC20(sushiBar).balanceOf(address(this)), 0); // stake resulting xSUSHI into BENTO for `to`
@@ -460,15 +474,8 @@ contract Inari is BoringBatchableWithDai {
     /***********************
     BENTO -> XSUSHI -> SUSHI 
     ***********************/
-    /// @notice Unstake xSUSHI `amount` from BENTO into SUSHI by batching calls to `bento` and `sushiBar`.
-    function unstakeSushiFromBento(uint256 amount) external {
-        bento.withdraw(IERC20(sushiBar), msg.sender, address(this), amount, 0); // withdraw `amount` of xSUSHI from BENTO into this contract
-        ISushiBarBridge(sushiBar).leave(amount); // burn withdrawn xSUSHI from `sushiBar` into SUSHI
-        sushiToken.safeTransfer(msg.sender, sushiToken.balanceOf(address(this))); // transfer resulting SUSHI to `msg.sender`
-    }
-    
     /// @notice Unstake xSUSHI `amount` from BENTO into SUSHI for benefit of `to` by batching calls to `bento` and `sushiBar`.
-    function unstakeSushiFromBentoTo(address to, uint256 amount) external {
+    function unstakeSushiFromBento(address to, uint256 amount) external {
         bento.withdraw(IERC20(sushiBar), msg.sender, address(this), amount, 0); // withdraw `amount` of xSUSHI from BENTO into this contract
         ISushiBarBridge(sushiBar).leave(amount); // burn withdrawn xSUSHI from `sushiBar` into SUSHI
         sushiToken.safeTransfer(to, sushiToken.balanceOf(address(this))); // transfer resulting SUSHI to `to`
@@ -482,19 +489,31 @@ contract Inari is BoringBatchableWithDai {
         ▀              █    ▀  
                       ▀      */
 // - COMPOUND - //
+    /***********
+    COMP HELPERS 
+    ***********/
+    function toCompound(ICompoundBridge cToken, uint256 underlyingAmount) external {
+        cToken.mint(underlyingAmount); 
+    }
+
+    function balanceToCompound(ICompoundBridge cToken) external {
+        IERC20 underlying = IERC20(ICompoundBridge(cToken).underlying()); // sanity check for `underlying` token
+        cToken.mint(underlying.balanceOf(address(this)));
+    }
+    
+    function fromCompound(ICompoundBridge cToken, uint256 cTokenAmount) external {
+        ICompoundBridge(cToken).redeem(cTokenAmount);
+    }
+    
+    function balanceFromCompound(address cToken) external {
+        ICompoundBridge(cToken).redeem(IERC20(cToken).balanceOf(address(this)));
+    }
+    
     /**************************
     COMP -> UNDERLYING -> BENTO 
     **************************/
-    /// @notice Migrate COMP/CREAM `cToken` underlying `amount` into BENTO by batching calls to `cToken` and `bento`.
-    function compoundToBento(address cToken, uint256 cTokenAmount) external {
-        IERC20(cToken).safeTransferFrom(msg.sender, address(this), cTokenAmount); // deposit `msg.sender` `cToken` `cTokenAmount` into this contract
-        ICompoundBridge(cToken).redeem(cTokenAmount); // burn deposited `cToken` into `underlying`
-        IERC20 underlying = IERC20(ICompoundBridge(cToken).underlying()); // sanity check for `underlying` token
-        bento.deposit(underlying, address(this), msg.sender, underlying.balanceOf(address(this)), 0); // stake resulting `underlying` into BENTO for `msg.sender`
-    }
-    
-    /// @notice Migrate COMP/CREAM `cToken` underlying `amount` into BENTO for benefit of `to` by batching calls to `cToken` and `bento`.
-    function compoundToBentoTo(address cToken, address to, uint256 cTokenAmount) external {
+    /// @notice Migrate COMP/CREAM `cToken` `cTokenAmount` into underlying and BENTO for benefit of `to` by batching calls to `cToken` and `bento`.
+    function compoundToBento(address cToken, address to, uint256 cTokenAmount) external {
         IERC20(cToken).safeTransferFrom(msg.sender, address(this), cTokenAmount); // deposit `msg.sender` `cToken` `cTokenAmount` into this contract
         ICompoundBridge(cToken).redeem(cTokenAmount); // burn deposited `cToken` into `underlying`
         IERC20 underlying = IERC20(ICompoundBridge(cToken).underlying()); // sanity check for `underlying` token
@@ -504,16 +523,8 @@ contract Inari is BoringBatchableWithDai {
     /**************************
     BENTO -> UNDERLYING -> COMP 
     **************************/
-    /// @notice Migrate `cToken` `underlyingAmount` from BENTO into COMP/CREAM by batching calls to `bento` and `cToken`.
-    function bentoToCompound(address cToken, uint256 underlyingAmount) external {
-        IERC20 underlying = IERC20(ICompoundBridge(cToken).underlying()); // sanity check for `underlying` token
-        bento.withdraw(underlying, msg.sender, address(this), underlyingAmount, 0); // withdraw `underlyingAmount` of `underlying` from BENTO into this contract
-        ICompoundBridge(cToken).mint(underlyingAmount); // stake `underlying` into `cToken`
-        IERC20(cToken).safeTransfer(msg.sender, IERC20(cToken).balanceOf(address(this))); // transfer resulting `cToken` to `msg.sender`
-    }
-    
     /// @notice Migrate `cToken` `underlyingAmount` from BENTO into COMP/CREAM for benefit of `to` by batching calls to `bento` and `cToken`.
-    function bentoToCompoundTo(address cToken, address to, uint256 underlyingAmount) external {
+    function bentoToCompound(address cToken, address to, uint256 underlyingAmount) external {
         IERC20 underlying = IERC20(ICompoundBridge(cToken).underlying()); // sanity check for `underlying` token
         bento.withdraw(underlying, msg.sender, address(this), underlyingAmount, 0); // withdraw `underlyingAmount` of `underlying` from BENTO into this contract
         ICompoundBridge(cToken).mint(underlyingAmount); // stake `underlying` into `cToken`
@@ -523,15 +534,8 @@ contract Inari is BoringBatchableWithDai {
     /**********************
     SUSHI -> CREAM -> BENTO 
     **********************/
-    /// @notice Stake SUSHI `amount` into crSUSHI and BENTO by batching calls to `crSushiToken` and `bento`.
-    function sushiToCreamToBento(uint256 amount) external {
-        sushiToken.safeTransferFrom(msg.sender, address(this), amount); // deposit `msg.sender` SUSHI `amount` into this contract
-        ICompoundBridge(crSushiToken).mint(amount); // stake deposited SUSHI into crSUSHI
-        bento.deposit(IERC20(crSushiToken), address(this), msg.sender, IERC20(crSushiToken).balanceOf(address(this)), 0); // stake resulting crSUSHI into BENTO for `msg.sender`
-    }
-    
     /// @notice Stake SUSHI `amount` into crSUSHI and BENTO for benefit of `to` by batching calls to `crSushiToken` and `bento`.
-    function sushiToCreamToBentoTo(address to, uint256 amount) external {
+    function sushiToCreamToBento(address to, uint256 amount) external {
         sushiToken.safeTransferFrom(msg.sender, address(this), amount); // deposit `msg.sender` SUSHI `amount` into this contract
         ICompoundBridge(crSushiToken).mint(amount); // stake deposited SUSHI into crSUSHI
         bento.deposit(IERC20(crSushiToken), address(this), to, IERC20(crSushiToken).balanceOf(address(this)), 0); // stake resulting crSUSHI into BENTO for `to`
@@ -540,33 +544,18 @@ contract Inari is BoringBatchableWithDai {
     /**********************
     BENTO -> CREAM -> SUSHI 
     **********************/
-    /// @notice Unstake crSUSHI `amount` into SUSHI from BENTO by batching calls to `bento` and `crSushiToken`.
-    function sushiFromCreamFromBento(uint256 amount) external {
-        bento.withdraw(IERC20(crSushiToken), msg.sender, address(this), amount, 0); // withdraw `amount` of `crSushiToken` from BENTO into this contract
-        ICompoundBridge(crSushiToken).redeem(amount); // burn deposited `crSushiToken` into SUSHI
-        sushiToken.safeTransfer(msg.sender, sushiToken.balanceOf(address(this))); // transfer resulting SUSHI to `msg.sender`
-    }
-    
-    /// @notice Unstake crSUSHI `amount` into SUSHI from BENTO for benefit of `to` by batching calls to `bento` and `crSushiToken`.
-    function sushiFromCreamFromBentoTo(address to, uint256 amount) external {
-        bento.withdraw(IERC20(crSushiToken), msg.sender, address(this), amount, 0); // withdraw `amount` of `crSushiToken` from BENTO into this contract
-        ICompoundBridge(crSushiToken).redeem(amount); // burn deposited `crSushiToken` into SUSHI
+    /// @notice Unstake crSUSHI `cTokenAmount` into SUSHI from BENTO for benefit of `to` by batching calls to `bento` and `crSushiToken`.
+    function sushiFromCreamFromBento(address to, uint256 cTokenAmount) external {
+        bento.withdraw(IERC20(crSushiToken), msg.sender, address(this), cTokenAmount, 0); // withdraw `cTokenAmount` of `crSushiToken` from BENTO into this contract
+        ICompoundBridge(crSushiToken).redeem(cTokenAmount); // burn deposited `crSushiToken` into SUSHI
         sushiToken.safeTransfer(to, sushiToken.balanceOf(address(this))); // transfer resulting SUSHI to `to`
     }
     
     /***********************
     SUSHI -> XSUSHI -> CREAM 
     ***********************/
-    /// @notice Stake SUSHI `amount` into crXSUSHI by batching calls to `sushiBar` and `crXSushiToken`.
-    function stakeSushiToCream(uint256 amount) external {
-        sushiToken.safeTransferFrom(msg.sender, address(this), amount); // deposit `msg.sender` SUSHI `amount` into this contract
-        ISushiBarBridge(sushiBar).enter(amount); // stake deposited SUSHI `amount` into `sushiBar` xSUSHI
-        ICompoundBridge(crXSushiToken).mint(IERC20(sushiBar).balanceOf(address(this))); // stake resulting xSUSHI into crXSUSHI
-        IERC20(crXSushiToken).safeTransfer(msg.sender, IERC20(crXSushiToken).balanceOf(address(this))); // transfer resulting crXSUSHI to `msg.sender`
-    }
-    
     /// @notice Stake SUSHI `amount` into crXSUSHI for benefit of `to` by batching calls to `sushiBar` and `crXSushiToken`.
-    function stakeSushiToCreamTo(address to, uint256 amount) external {
+    function stakeSushiToCream(address to, uint256 amount) external {
         sushiToken.safeTransferFrom(msg.sender, address(this), amount); // deposit `msg.sender` SUSHI `amount` into this contract
         ISushiBarBridge(sushiBar).enter(amount); // stake deposited SUSHI `amount` into `sushiBar` xSUSHI
         ICompoundBridge(crXSushiToken).mint(IERC20(sushiBar).balanceOf(address(this))); // stake resulting xSUSHI into crXSUSHI
@@ -576,18 +565,10 @@ contract Inari is BoringBatchableWithDai {
     /***********************
     CREAM -> XSUSHI -> SUSHI 
     ***********************/
-    /// @notice Unstake crXSUSHI `amount` into SUSHI by batching calls to `crXSushiToken` and `sushiBar`.
-    function unstakeSushiFromCream(uint256 amount) external {
-        IERC20(crXSushiToken).safeTransferFrom(msg.sender, address(this), amount); // deposit `msg.sender` `crXSushiToken` `amount` into this contract
-        ICompoundBridge(crXSushiToken).redeem(amount); // burn deposited `crXSushiToken` `amount` into xSUSHI
-        ISushiBarBridge(sushiBar).leave(IERC20(sushiBar).balanceOf(address(this))); // burn resulting xSUSHI `amount` from `sushiBar` into SUSHI
-        sushiToken.safeTransfer(msg.sender, sushiToken.balanceOf(address(this))); // transfer resulting SUSHI to `msg.sender`
-    }
-    
-    /// @notice Unstake crXSUSHI `amount` into SUSHI for benefit of `to` by batching calls to `crXSushiToken` and `sushiBar`.
-    function unstakeSushiFromCreamTo(address to, uint256 amount) external {
-        IERC20(crXSushiToken).safeTransferFrom(msg.sender, address(this), amount); // deposit `msg.sender` `crXSushiToken` `amount` into this contract
-        ICompoundBridge(crXSushiToken).redeem(amount); // burn deposited `crXSushiToken` `amount` into xSUSHI
+    /// @notice Unstake crXSUSHI `cTokenAmount` into SUSHI for benefit of `to` by batching calls to `crXSushiToken` and `sushiBar`.
+    function unstakeSushiFromCream(address to, uint256 cTokenAmount) external {
+        IERC20(crXSushiToken).safeTransferFrom(msg.sender, address(this), cTokenAmount); // deposit `msg.sender` `crXSushiToken` `cTokenAmount` into this contract
+        ICompoundBridge(crXSushiToken).redeem(cTokenAmount); // burn deposited `crXSushiToken` `cTokenAmount` into xSUSHI
         ISushiBarBridge(sushiBar).leave(IERC20(sushiBar).balanceOf(address(this))); // burn resulting xSUSHI `amount` from `sushiBar` into SUSHI
         sushiToken.safeTransfer(to, sushiToken.balanceOf(address(this))); // transfer resulting SUSHI to `to`
     }
@@ -595,16 +576,8 @@ contract Inari is BoringBatchableWithDai {
     /********************************
     SUSHI -> XSUSHI -> CREAM -> BENTO 
     ********************************/
-    /// @notice Stake SUSHI `amount` into crXSUSHI and BENTO by batching calls to `sushiBar`, `crXSushiToken` and `bento`.
-    function stakeSushiToCreamToBento(uint256 amount) external {
-        sushiToken.safeTransferFrom(msg.sender, address(this), amount); // deposit `msg.sender` SUSHI `amount` into this contract
-        ISushiBarBridge(sushiBar).enter(amount); // stake deposited SUSHI `amount` into `sushiBar` xSUSHI
-        ICompoundBridge(crXSushiToken).mint(IERC20(sushiBar).balanceOf(address(this))); // stake resulting xSUSHI into crXSUSHI
-        bento.deposit(IERC20(crXSushiToken), address(this), msg.sender, IERC20(crXSushiToken).balanceOf(address(this)), 0); // stake resulting crXSUSHI into BENTO for `msg.sender`
-    }
-    
     /// @notice Stake SUSHI `amount` into crXSUSHI and BENTO for benefit of `to` by batching calls to `sushiBar`, `crXSushiToken` and `bento`.
-    function stakeSushiToCreamToBentoTo(address to, uint256 amount) external {
+    function stakeSushiToCreamToBento(address to, uint256 amount) external {
         sushiToken.safeTransferFrom(msg.sender, address(this), amount); // deposit `msg.sender` SUSHI `amount` into this contract
         ISushiBarBridge(sushiBar).enter(amount); // stake deposited SUSHI `amount` into `sushiBar` xSUSHI
         ICompoundBridge(crXSushiToken).mint(IERC20(sushiBar).balanceOf(address(this))); // stake resulting xSUSHI into crXSUSHI
@@ -614,19 +587,11 @@ contract Inari is BoringBatchableWithDai {
     /********************************
     BENTO -> CREAM -> XSUSHI -> SUSHI 
     ********************************/
-    /// @notice Unstake crXSUSHI `amount` into SUSHI from BENTO by batching calls to `bento`, `crXSushiToken` and `sushiBar`.
-    function unstakeSushiFromCreamFromBento(uint256 amount) external {
-        bento.withdraw(IERC20(crXSushiToken), msg.sender, address(this), amount, 0); // withdraw `amount` of `crXSushiToken` from BENTO into this contract
-        ICompoundBridge(crXSushiToken).redeem(amount); // burn deposited `crXSushiToken` `amount` into xSUSHI
-        ISushiBarBridge(sushiBar).leave(IERC20(sushiBar).balanceOf(address(this))); // burn resulting xSUSHI `amount` from `sushiBar` into SUSHI
-        sushiToken.safeTransfer(msg.sender, sushiToken.balanceOf(address(this))); // transfer resulting SUSHI to `msg.sender`
-    }
-    
-    /// @notice Unstake crXSUSHI `amount` into SUSHI from BENTO for benefit of `to` by batching calls to `bento`, `crXSushiToken` and `sushiBar`.
-    function unstakeSushiFromCreamFromBentoTo(address to, uint256 amount) external {
-        bento.withdraw(IERC20(crXSushiToken), msg.sender, address(this), amount, 0); // withdraw `amount` of `crXSushiToken` from BENTO into this contract
-        ICompoundBridge(crXSushiToken).redeem(amount); // burn deposited `crXSushiToken` `amount` into xSUSHI
-        ISushiBarBridge(sushiBar).leave(IERC20(sushiBar).balanceOf(address(this))); // burn resulting xSUSHI `amount` from `sushiBar` into SUSHI
+    /// @notice Unstake crXSUSHI `cTokenAmount` into SUSHI from BENTO for benefit of `to` by batching calls to `bento`, `crXSushiToken` and `sushiBar`.
+    function unstakeSushiFromCreamFromBento(address to, uint256 cTokenAmount) external {
+        bento.withdraw(IERC20(crXSushiToken), msg.sender, address(this), cTokenAmount, 0); // withdraw `cTokenAmount` of `crXSushiToken` from BENTO into this contract
+        ICompoundBridge(crXSushiToken).redeem(cTokenAmount); // burn deposited `crXSushiToken` `cTokenAmount` into xSUSHI
+        ISushiBarBridge(sushiBar).leave(IERC20(sushiBar).balanceOf(address(this))); // burn resulting xSUSHI from `sushiBar` into SUSHI
         sushiToken.safeTransfer(to, sushiToken.balanceOf(address(this))); // transfer resulting SUSHI to `to`
     }
 /*
@@ -637,36 +602,8 @@ contract Inari is BoringBatchableWithDai {
            █ █ █     █  █        
             ▀ ▀     █    ▀       
                    ▀     */
-    /// @notice ETH sent to Inari is converted into SUSHI and staked into xSUSHI for `msg.sender`. 
-    receive() external payable { // SWAP `n STAKE
-        (uint256 reserve0, uint256 reserve1, ) = sushiSwapSushiETHPair.getReserves();
-        uint256 amountInWithFee = msg.value.mul(997);
-        uint256 amountOut =
-            amountInWithFee.mul(reserve0) /
-            reserve1.mul(1000).add(amountInWithFee);
-        ISushiSwap(wETH).deposit{value: msg.value}();
-        IERC20(wETH).safeTransfer(address(sushiSwapSushiETHPair), msg.value);
-        sushiSwapSushiETHPair.swap(amountOut, 0, address(this), "");
-        ISushiBarBridge(sushiBar).enter(sushiToken.balanceOf(address(this))); // stake resulting SUSHI into `sushiBar` xSUSHI
-        IERC20(sushiBar).safeTransfer(msg.sender, IERC20(sushiBar).balanceOf(address(this))); // transfer resulting xSUSHI to `msg.sender`
-    }
-    
-    /// @notice Swap ETH to stake SUSHI into xSUSHI. 
-    function ethToStakeSushi() external payable { // SWAP `n STAKE
-        (uint256 reserve0, uint256 reserve1, ) = sushiSwapSushiETHPair.getReserves();
-        uint256 amountInWithFee = msg.value.mul(997);
-        uint256 amountOut =
-            amountInWithFee.mul(reserve0) /
-            reserve1.mul(1000).add(amountInWithFee);
-        ISushiSwap(wETH).deposit{value: msg.value}();
-        IERC20(wETH).safeTransfer(address(sushiSwapSushiETHPair), msg.value);
-        sushiSwapSushiETHPair.swap(amountOut, 0, address(this), "");
-        ISushiBarBridge(sushiBar).enter(sushiToken.balanceOf(address(this))); // stake resulting SUSHI into `sushiBar` xSUSHI
-        IERC20(sushiBar).safeTransfer(msg.sender, IERC20(sushiBar).balanceOf(address(this))); // transfer resulting xSUSHI to `msg.sender`
-    }
-    
-    /// @notice Swap ETH to stake SUSHI into xSUSHI for benefit of `to`. 
-    function ethToStakeSushiTo(address to) external payable { // SWAP `n STAKE
+    /// @notice SushiSwap ETH to stake SUSHI into xSUSHI for benefit of `to`. 
+    function ethStakeSushi(address to) external payable { // SWAP `N STAKE
         (uint256 reserve0, uint256 reserve1, ) = sushiSwapSushiETHPair.getReserves();
         uint256 amountInWithFee = msg.value.mul(997);
         uint256 amountOut =
@@ -678,63 +615,9 @@ contract Inari is BoringBatchableWithDai {
         ISushiBarBridge(sushiBar).enter(sushiToken.balanceOf(address(this))); // stake resulting SUSHI into `sushiBar` xSUSHI
         IERC20(sushiBar).safeTransfer(to, IERC20(sushiBar).balanceOf(address(this))); // transfer resulting xSUSHI to `to`
     }
-    
-    /// @notice SushiSwap `fromToken` to `toToken` with `amountIn`.
-    function swap(address fromToken, address toToken, uint256 amountIn) external returns (uint256 amountOut) {
-        (address token0, address token1) = fromToken < toToken ? (fromToken, toToken) : (toToken, fromToken);
-        ISushiSwap pair =
-            ISushiSwap(
-                uint256(
-                    keccak256(abi.encodePacked(hex"ff", sushiSwapFactory, keccak256(abi.encodePacked(token0, token1)), pairCodeHash))
-                )
-            );
-        (uint256 reserve0, uint256 reserve1, ) = pair.getReserves();
-        uint256 amountInWithFee = amountIn.mul(997);
-        IERC20(fromToken).safeTransferFrom(msg.sender, address(this), amountIn);
-        if (toToken > fromToken) {
-            amountOut =
-                amountInWithFee.mul(reserve1) /
-                reserve0.mul(1000).add(amountInWithFee);
-            IERC20(fromToken).safeTransfer(address(pair), amountIn);
-            pair.swap(0, amountOut, msg.sender, "");
-        } else {
-            amountOut =
-                amountInWithFee.mul(reserve0) /
-                reserve1.mul(1000).add(amountInWithFee);
-            IERC20(fromToken).safeTransfer(address(pair), amountIn);
-            pair.swap(amountOut, 0, msg.sender, "");
-        }
-    }
-    
-    /// @notice SushiSwap all `fromToken` in this contract to `toToken`.
-    function swapAll(address fromToken, address toToken) external returns (uint256 amountOut) {
-        (address token0, address token1) = fromToken < toToken ? (fromToken, toToken) : (toToken, fromToken);
-        ISushiSwap pair =
-            ISushiSwap(
-                uint256(
-                    keccak256(abi.encodePacked(hex"ff", sushiSwapFactory, keccak256(abi.encodePacked(token0, token1)), pairCodeHash))
-                )
-            );
-        uint256 amountIn = IERC20(fromToken).balanceOf(address(this));
-        (uint256 reserve0, uint256 reserve1, ) = pair.getReserves();
-        uint256 amountInWithFee = amountIn.mul(997);
-        if (toToken > fromToken) {
-            amountOut =
-                amountInWithFee.mul(reserve1) /
-                reserve0.mul(1000).add(amountInWithFee);
-            IERC20(fromToken).safeTransfer(address(pair), amountIn);
-            pair.swap(0, amountOut, msg.sender, "");
-        } else {
-            amountOut =
-                amountInWithFee.mul(reserve0) /
-                reserve1.mul(1000).add(amountInWithFee);
-            IERC20(fromToken).safeTransfer(address(pair), amountIn);
-            pair.swap(amountOut, 0, msg.sender, "");
-        }
-    }
-    
+
     /// @notice SushiSwap `fromToken` `amountIn` to `toToken` for benefit of `to`.
-    function swapTo(address to, address fromToken, address toToken, uint256 amountIn) external returns (uint256 amountOut) {
+    function swap(address fromToken, address toToken, address to, uint256 amountIn) external returns (uint256 amountOut) {
         (address token0, address token1) = fromToken < toToken ? (fromToken, toToken) : (toToken, fromToken);
         ISushiSwap pair =
             ISushiSwap(
@@ -760,8 +643,8 @@ contract Inari is BoringBatchableWithDai {
         }
     }
     
-    /// @notice SushiSwap all `fromToken` in this contract to `toToken` for benefit of `to`.
-    function swapAllTo(address to, address fromToken, address toToken) external returns (uint256 amountOut) {
+    /// @notice SushiSwap local `fromToken` balance in this contract to `toToken` for benefit of `to`.
+    function swapBalance(address fromToken, address toToken, address to) external returns (uint256 amountOut) {
         (address token0, address token1) = fromToken < toToken ? (fromToken, toToken) : (toToken, fromToken);
         ISushiSwap pair =
             ISushiSwap(
@@ -783,6 +666,33 @@ contract Inari is BoringBatchableWithDai {
                 amountInWithFee.mul(reserve0) /
                 reserve1.mul(1000).add(amountInWithFee);
             IERC20(fromToken).safeTransfer(address(pair), amountIn);
+            pair.swap(amountOut, 0, to, "");
+        }
+    }
+    
+    /// @notice SushiSwap ETH `msg.value` to `toToken` for benefit of `to`.
+    function swapETH(address toToken, address to) external payable returns (uint256 amountOut) {
+        (address token0, address token1) = wETH < toToken ? (wETH, toToken) : (toToken, wETH);
+        ISushiSwap pair =
+            ISushiSwap(
+                uint256(
+                    keccak256(abi.encodePacked(hex"ff", sushiSwapFactory, keccak256(abi.encodePacked(token0, token1)), pairCodeHash))
+                )
+            );
+        (uint256 reserve0, uint256 reserve1, ) = pair.getReserves();
+        uint256 amountInWithFee = msg.value.mul(997);
+        ISushiSwap(wETH).deposit{value: msg.value}();
+        if (toToken > wETH) {
+            amountOut =
+                amountInWithFee.mul(reserve1) /
+                reserve0.mul(1000).add(amountInWithFee);
+            IERC20(wETH).safeTransfer(address(pair), msg.value);
+            pair.swap(0, amountOut, to, "");
+        } else {
+            amountOut =
+                amountInWithFee.mul(reserve0) /
+                reserve1.mul(1000).add(amountInWithFee);
+            IERC20(wETH).safeTransfer(address(pair), msg.value);
             pair.swap(amountOut, 0, to, "");
         }
     }
