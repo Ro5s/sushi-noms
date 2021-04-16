@@ -115,7 +115,8 @@ interface ISushiBarBridge {
 
 /// @notice Interface for SushiSwap.
 interface ISushiSwap {
-    function deposit() external payable;
+    function deposit() external payable; // wETH helper
+    function withdraw(uint wad) external; // wETH helper
     function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast);
     function swap(uint amount0Out, uint amount1Out, address to, bytes calldata data) external;
 }
@@ -448,7 +449,7 @@ contract Inari is BoringBatchableWithDai {
     function toBento(IERC20 token, address to, uint256 amount) external {
         bento.deposit(token, address(this), to, amount, 0); 
     }
-
+    
     function balanceToBento(IERC20 token, address to) external {
         bento.deposit(token, address(this), to, token.balanceOf(address(this)), 0); 
     }
@@ -459,6 +460,11 @@ contract Inari is BoringBatchableWithDai {
     
     function balanceFromBento(IERC20 token, address to) external {
         bento.withdraw(token, msg.sender, to, bento.balanceOf(token, msg.sender), 0); 
+    }
+    
+    function ethToBento(address to) external payable {
+        ISushiSwap(wETH).deposit{value: msg.value}();
+        bento.deposit(IERC20(wETH), address(this), to, msg.value, 0); 
     }
 
     /***********************
@@ -602,6 +608,20 @@ contract Inari is BoringBatchableWithDai {
            █ █ █     █  █        
             ▀ ▀     █    ▀       
                    ▀     */
+    /// @notice SushiSwap ETH to stake SUSHI into xSUSHI and BENTO for benefit of `msg.sender`.
+    receive() external payable { // INARIZUSHI
+        (uint256 reserve0, uint256 reserve1, ) = sushiSwapSushiETHPair.getReserves();
+        uint256 amountInWithFee = msg.value.mul(997);
+        uint256 amountOut =
+            amountInWithFee.mul(reserve0) /
+            reserve1.mul(1000).add(amountInWithFee);
+        ISushiSwap(wETH).deposit{value: msg.value}();
+        IERC20(wETH).safeTransfer(address(sushiSwapSushiETHPair), msg.value);
+        sushiSwapSushiETHPair.swap(amountOut, 0, address(this), "");
+        ISushiBarBridge(sushiBar).enter(sushiToken.balanceOf(address(this))); // stake resulting SUSHI into `sushiBar` xSUSHI
+        bento.deposit(IERC20(sushiBar), address(this), msg.sender, IERC20(sushiBar).balanceOf(address(this)), 0); // stake resulting xSUSHI into BENTO for `msg.sender`
+    }
+    
     /// @notice SushiSwap ETH to stake SUSHI into xSUSHI for benefit of `to`. 
     function ethStakeSushi(address to) external payable { // SWAP `N STAKE
         (uint256 reserve0, uint256 reserve1, ) = sushiSwapSushiETHPair.getReserves();
