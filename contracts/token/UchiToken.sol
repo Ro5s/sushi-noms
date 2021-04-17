@@ -131,16 +131,17 @@ contract UchiToken is BaseBoringBatchable {
     }
 
     /// - RESTRICTED ERC20 - ///
-    function approve(address to, uint256 amount) public returns (bool) {
+    function approve(address to, uint256 amount) external returns (bool) {
         allowance[msg.sender][to] = amount;
         emit Approval(msg.sender, to, amount);
         return true;
     }
     
     function transfer(address to, uint256 amount) external returns (bool) {
-        if (!exempt[msg.sender] && timeRestricted) {require(block.timestamp >= timeRestrictionEnds, "!time/exempt");} 
-        if (!exempt[msg.sender] && uchiRestricted) {require(uchi[msg.sender] && uchi[to], "!uchi/exempt");}
-        if (mochiRestricted) {require(deployer.masterUchi(msg.sender) && deployer.masterUchi(to), "!uchi/exempt");}
+        if (!exempt[msg.sender] && !exempt[to]) {
+            if (timeRestricted) {require(block.timestamp >= timeRestrictionEnds, "!time/exempt");} 
+            if (mochiRestricted) {require(deployer.masterUchi(msg.sender) && deployer.masterUchi(to), "!mochi/exempt");}
+            if (uchiRestricted) {require(uchi[msg.sender] && uchi[to], "!uchi/exempt");}}
         balanceOf[msg.sender] -= amount;
         balanceOf[to] += amount;
         emit Transfer(msg.sender, to, amount);
@@ -148,9 +149,10 @@ contract UchiToken is BaseBoringBatchable {
     }
     
     function transferFrom(address from, address to, uint256 amount) external returns (bool) {
-        if (!exempt[msg.sender] && timeRestricted) {require(block.timestamp >= timeRestrictionEnds, "!time/exempt");} 
-        if (!exempt[msg.sender] && uchiRestricted) {require(uchi[msg.sender] && uchi[to], "!uchi/exempt");}
-        if (mochiRestricted) {require(deployer.masterUchi(from) && deployer.masterUchi(to), "!uchi/exempt");}
+        if (!exempt[from] && !exempt[to]) {
+            if (timeRestricted) {require(block.timestamp >= timeRestrictionEnds, "!time/exempt");} 
+            if (mochiRestricted) {require(deployer.masterUchi(from) && deployer.masterUchi(to), "!mochi/exempt");}
+            if (uchiRestricted) {require(uchi[from] && uchi[to], "!uchi/exempt");}}
         balanceOf[from] -= amount;
         balanceOf[to] += amount;
         allowance[from][msg.sender] -= amount;
