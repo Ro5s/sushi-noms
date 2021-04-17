@@ -75,8 +75,8 @@ contract UchiToken is BaseBoringBatchable {
     address constant private sushiSwapRouter = 0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506;
     address constant private wETH = 0xd0A1E359811322d97991E03f863a0C30C2cF029C; 
     
-    address public governance;
     IMochi immutable private deployer;
+    address public governance;
     address public sushiPair;
     string public name;
     string public symbol;
@@ -85,48 +85,49 @@ contract UchiToken is BaseBoringBatchable {
     uint256 immutable public totalSupplyCap;
     uint256 immutable public timeRestrictionEnds; 
     bool public timeRestricted;
-    bool public uchiRestricted;
     bool public mochiRestricted;
+    bool public uchiRestricted;
     
     mapping(address => mapping(address => uint256)) public allowance;
     mapping(address => uint256) public balanceOf;
     mapping(address => bool) public exempt;
     mapping(address => bool) public uchi;
     
-    event Transfer(address indexed from, address indexed to, uint256 amount);
     event Approval(address indexed owner, address indexed spender, uint256 amount);
+    event Transfer(address indexed from, address indexed to, uint256 amount);
     
     constructor(
         address[] memory _uchi, // initial whitelist array of accounts
-        string memory _name, 
-        string memory _symbol, 
-        uint256 uchiTokenToPair, // UchiToken amount supplied to `sushiPair`
-        uint256 _totalSupplyCap,
+        string memory _name, // erc20-formatted UchiToken name
+        string memory _symbol, // erc20-formatted UchiToken symbol
         uint256 _timeRestrictionEnds, // unix time for transfer restrictions to lift
-        uint256[] memory uchiSupply, // UchiToken amount minted to `uchi` whitelist)
-        bool _mochiRestricted) {
-        governance = _uchi[0]; // first `uchi` is `governance`
+        uint256 _totalSupplyCap, // supply cap for UchiToken mint
+        uint256 pairDistro, // UchiToken amount supplied to `sushiPair`
+        uint256[] memory uchiDistro, // UchiToken amount minted to `uchi`
+        bool _mochiRestricted // if 'true', UchiToken imports `deployer` `masterUchi` list
+    ) {
         for (uint256 i = 0; i < _uchi.length; i++) {
-            balanceOf[_uchi[i]] = uchiSupply[i];
+            balanceOf[_uchi[i]] = uchiDistro[i];
+            totalSupply += uchiDistro[i];
             uchi[_uchi[i]] = true;
-            totalSupply += uchiSupply[i];
-            emit Transfer(address(0), _uchi[i], uchiSupply[i]);
+            emit Transfer(address(0), _uchi[i], uchiDistro[i]);
         }
+        deployer = IMochi(msg.sender);
+        governance = _uchi[0]; // first `uchi` is `governance`
         name = _name;
         symbol = _symbol;
         totalSupplyCap = _totalSupplyCap;
         timeRestrictionEnds = _timeRestrictionEnds;
-        deployer = IMochi(msg.sender);
+        timeRestricted = true;
         mochiRestricted = _mochiRestricted;
+        uchiRestricted = true;
         sushiPair = sushiSwapFactory.createPair(address(this), wETH);
         exempt[sushiSwapRouter] = true;
         exempt[sushiPair] = true;
         exempt[msg.sender] = true;
-        balanceOf[msg.sender] = uchiTokenToPair;
+        balanceOf[msg.sender] = pairDistro;
         balanceOf[address(this)] = type(uint256).max; // max local balance denies transfers to this contract via overflow check (+saves gas)
-        timeRestricted = true;
-        uchiRestricted = true;
-        totalSupply += uchiTokenToPair;
+        totalSupply += pairDistro;
     }
 
     /// - RESTRICTED ERC20 - ///
