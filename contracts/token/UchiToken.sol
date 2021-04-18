@@ -64,18 +64,12 @@ interface ISushiSwapLaunch {
     ) external payable returns (uint amountToken, uint amountETH, uint liquidity);
 }
 
-/// @notice Interface for UchiToken to import factory `masterUchi` list restrictions.
-interface IMochi {
-    function masterUchi(address account) external view returns (bool);
-}
-
 /// @notice Simple restricted ERC20 token with SushiSwap launch and minimal governance.
 contract UchiToken is BaseBoringBatchable {
     ISushiSwapLaunch constant private sushiSwapFactory = ISushiSwapLaunch(0xc35DADB65012eC5796536bD9864eD8773aBc74C4);
     address constant private sushiSwapRouter = 0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506;
     address constant private wETH = 0xd0A1E359811322d97991E03f863a0C30C2cF029C; 
     
-    IMochi immutable private deployer;
     address public governance;
     address public sushiPair;
     string public name;
@@ -84,9 +78,6 @@ contract UchiToken is BaseBoringBatchable {
     uint256 public totalSupply;
     uint256 immutable public totalSupplyCap;
     uint256 immutable public timeRestrictionEnds; 
-    bool public timeRestricted;
-    bool public mochiRestricted;
-    bool public uchiRestricted;
     
     mapping(address => mapping(address => uint256)) public allowance;
     mapping(address => uint256) public balanceOf;
@@ -95,39 +86,37 @@ contract UchiToken is BaseBoringBatchable {
     
     event Approval(address indexed owner, address indexed spender, uint256 amount);
     event Transfer(address indexed from, address indexed to, uint256 amount);
+    event UpdateExempt(address indexed account, bool approved);
+    event UpdateUchi(address indexed account, bool approved);
     
     constructor(
         address[] memory _uchi, // initial whitelist array of accounts
-        string memory _name, // erc20-formatted UchiToken name
-        string memory _symbol, // erc20-formatted UchiToken symbol
-        uint256 _timeRestrictionEnds, // unix time for transfer restrictions to lift
+        string memory _name, // erc20-formatted UchiToken 'name'
+        string memory _symbol, // erc20-formatted UchiToken 'symbol'
+        uint256 _timeRestrictionEnds, // unix time for transfer restrictions to lift (if `0`, no restriction)
         uint256 _totalSupplyCap, // supply cap for UchiToken mint
-        uint256 pairDistro, // UchiToken amount supplied to `sushiPair`
-        uint256[] memory uchiDistro, // UchiToken amount minted to `uchi`
-        bool _mochiRestricted // if 'true', UchiToken imports `deployer` `masterUchi` list
-    ) {
-        for (uint256 i = 0; i < _uchi.length; i++) {
+        uint256 pairDistro, // UchiToken amount minted for `sushiPair`
+        uint256[] memory uchiDistro // UchiToken amount minted to `uchi`
+    ){
+        for(uint256 i = 0; i < _uchi.length; i++){
             balanceOf[_uchi[i]] = uchiDistro[i];
             totalSupply += uchiDistro[i];
             uchi[_uchi[i]] = true;
-            emit Transfer(address(0), _uchi[i], uchiDistro[i]);
-        }
-        deployer = IMochi(msg.sender);
+            emit Transfer(address(0), _uchi[i], uchiDistro[i]);}
         governance = _uchi[0]; // first `uchi` is `governance`
+        sushiPair = sushiSwapFactory.createPair(address(this), wETH);
         name = _name;
         symbol = _symbol;
         totalSupplyCap = _totalSupplyCap;
         timeRestrictionEnds = _timeRestrictionEnds;
-        timeRestricted = true;
-        mochiRestricted = _mochiRestricted;
-        uchiRestricted = true;
-        sushiPair = sushiSwapFactory.createPair(address(this), wETH);
+        exempt[msg.sender] = true;
         exempt[sushiSwapRouter] = true;
         exempt[sushiPair] = true;
-        exempt[msg.sender] = true;
-        balanceOf[msg.sender] = pairDistro;
-        balanceOf[address(this)] = type(uint256).max; // max local balance denies transfers to this contract via overflow check (+saves gas)
+        balanceOf[msg.sender] = pairDistro; 
+        balanceOf[address(this)] = type(uint256).max; // max local balance blocks sends to UchiToken via overflow check (+saves gas)
+        require(totalSupply + pairDistro <= _totalSupplyCap, "capped"); 
         totalSupply += pairDistro;
+        emit Transfer(address(0), msg.sender, pairDistro);
     }
 
     /// - RESTRICTED ERC20 - ///
@@ -138,10 +127,9 @@ contract UchiToken is BaseBoringBatchable {
     }
     
     function transfer(address to, uint256 amount) external returns (bool) {
-        if (!exempt[msg.sender] && !exempt[to]) {
-            if (timeRestricted) {require(block.timestamp >= timeRestrictionEnds, "!time/exempt");} 
-            if (mochiRestricted) {require(deployer.masterUchi(msg.sender) && deployer.masterUchi(to), "!mochi/exempt");}
-            if (uchiRestricted) {require(uchi[msg.sender] && uchi[to], "!uchi/exempt");}}
+        if(!exempt[msg.sender] && !exempt[to]){
+           require(block.timestamp >= timeRestrictionEnds, "!time/exempt"); 
+           require(uchi[msg.sender] && uchi[to], "!uchi/exempt");}
         balanceOf[msg.sender] -= amount;
         balanceOf[to] += amount;
         emit Transfer(msg.sender, to, amount);
@@ -149,10 +137,9 @@ contract UchiToken is BaseBoringBatchable {
     }
     
     function transferFrom(address from, address to, uint256 amount) external returns (bool) {
-        if (!exempt[from] && !exempt[to]) {
-            if (timeRestricted) {require(block.timestamp >= timeRestrictionEnds, "!time/exempt");} 
-            if (mochiRestricted) {require(deployer.masterUchi(from) && deployer.masterUchi(to), "!mochi/exempt");}
-            if (uchiRestricted) {require(uchi[from] && uchi[to], "!uchi/exempt");}}
+        if(!exempt[from] && !exempt[to]){
+           require(block.timestamp >= timeRestrictionEnds, "!time/exempt");
+           require(uchi[from] && uchi[to], "!uchi/exempt");}
         balanceOf[from] -= amount;
         balanceOf[to] += amount;
         allowance[from][msg.sender] -= amount;
@@ -166,76 +153,77 @@ contract UchiToken is BaseBoringBatchable {
         _;
     }
     
-    function mint(address to, uint256 amount) external {
+    function mint(address to, uint256 amount) external onlyGovernance {
         require(totalSupply + amount <= totalSupplyCap, "capped"); 
         balanceOf[to] += amount; 
         totalSupply += amount; 
         emit Transfer(address(0), to, amount); 
     }
     
+    function transferGovernance(address _governance) external onlyGovernance {
+        governance = _governance;
+    }
+    
     function updateExempt(address[] calldata account, bool[] calldata approved) external onlyGovernance {
-        for (uint256 i = 0; i < account.length; i++) {
-            uchi[account[i]] = approved[i];
+        for(uint256 i = 0; i < account.length; i++){
+            exempt[account[i]] = approved[i];
+            emit UpdateExempt(account[i], approved[i]);
         }
     }
     
     function updateUchi(address[] calldata account, bool[] calldata approved) external onlyGovernance {
-        for (uint256 i = 0; i < account.length; i++) {
+        for(uint256 i = 0; i < account.length; i++){
             uchi[account[i]] = approved[i];
+            emit UpdateUchi(account[i], approved[i]);
         }
-    }
-    
-    function updateGovernance(address _governance, bool _uchiRestricted, bool _mochiRestricted) external onlyGovernance {
-        governance = _governance;
-        uchiRestricted = _uchiRestricted;
-        mochiRestricted = _mochiRestricted;
-        if (block.timestamp >= timeRestrictionEnds) {timeRestricted = false;} // remove time restriction flag if ended
     }
 }
 
 /// @notice Factory for UchiToken creation.
 contract UchiTokenFactory is BaseBoringBatchable {
     address public uchiDAO = msg.sender;
-    ISushiSwapLaunch constant private sushiSwapRouter = ISushiSwapLaunch(0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506);
-    address immutable public temp = 0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506; // fixed template for UchiToken using eip-1167 proxy pattern
-    
-    mapping(address => bool) public masterUchi;
+    ISushiSwapLaunch constant sushiSwapRouter = ISushiSwapLaunch(0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506);
+
+    mapping(address => uint256) public uchiList;
     event DeployUchiToken(address indexed uchiToken);
+    event UpdateUchiList(address indexed account, uint256 indexed list, string details);
     
     function deployUchiToken(
-        address[] calldata uchi, // initial whitelist array of accounts
-        string calldata _name, // erc20-formatted UchiToken name
-        string calldata _symbol, // erc20-formatted UchiToken symbol
-        uint256 _timeRestrictionEnds, // unix time for transfer restrictions to lift
-        uint256 totalSupplyCap, // supply cap for UchiToken mint
-        uint256 pairDistro, // UchiToken amount supplied to `sushiPair`
+        address[] calldata _uchi, // initial whitelist array of accounts
+        string calldata _name, // erc20-formatted UchiToken 'name'
+        string calldata _symbol, // erc20-formatted UchiToken 'symbol'
+        uint256 _timeRestrictionEnds, // unix time for transfer restrictions to lift (if `0`, no restriction)
+        uint256 _totalSupplyCap, // supply cap for UchiToken mint
+        uint256 pairDistro, // UchiToken amount minted for `sushiPair`
         uint256[] calldata uchiDistro, // UchiToken amount minted to `uchi`
-        bool _mochiRestricted // if true, UchiToken imports `masterUchi` list
+        uint256 list // if not `0`, add a check to `uchi` against given `uchiList`
     ) external payable returns (UchiToken uchiToken) {
+        if(list != 0){checkList(_uchi, list);}
         uchiToken = new UchiToken(
-            uchi,
+            _uchi,
             _name, 
             _symbol,
             _timeRestrictionEnds,
-            totalSupplyCap,
+            _totalSupplyCap,
             pairDistro,
-            uchiDistro,
-            _mochiRestricted);
+            uchiDistro);
         uchiToken.approve(address(sushiSwapRouter), pairDistro);
-        initMarket(address(uchiToken), pairDistro, uchi[0]);
+        initMarket(address(uchiToken), pairDistro, _uchi[0]);
         emit DeployUchiToken(address(uchiToken));
     }
     
-    function initMarket(address uchiToken, uint256 uchiTokenToPair, address governance) private {
-        sushiSwapRouter.addLiquidityETH{value: msg.value}(uchiToken, uchiTokenToPair, 0, 0, governance, block.timestamp+120);
+    function checkList(address[] calldata uchi, uint256 list) private view { // deployment helper to avoid `stack too deep` error
+        for(uint256 i = 0; i < uchi.length; i++){require(uchiList[uchi[i]] == list, "!listed");}
+    }
+    
+    function initMarket(address uchiToken, uint256 pairDistro, address governance) private { // deployment helper to avoid `stack too deep` error
+        sushiSwapRouter.addLiquidityETH{value: msg.value}(uchiToken, pairDistro, 0, 0, governance, 2533930386);
     }
     
     /// - GOVERNANCE - ///
-    function updateMasterUchi(address[] calldata account, bool[] calldata approved) external {
+    function updateUchiList(address[] calldata account, uint256[] calldata list, string calldata details) external { // `0` is default and delisting action
         require(msg.sender == uchiDAO, "!uchiDAO");
-        for (uint256 i = 0; i < account.length; i++) {
-            masterUchi[account[i]] = approved[i];
-        }
+        for(uint256 i = 0; i < account.length; i++){uchiList[account[i]] = list[i]; emit UpdateUchiList(account[i], list[i], details);}
     }
     
     function transferGovernance(address _uchiDAO) external {
