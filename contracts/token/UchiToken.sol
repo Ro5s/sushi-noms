@@ -30,9 +30,9 @@ interface ISushiSwapLaunch {
 
 /// @notice Whitelist ERC20 token with SushiSwap launch.
 contract UchiToken {
-    ISushiSwapLaunch constant sushiSwapFactory=ISushiSwapLaunch(0xc35DADB65012eC5796536bD9864eD8773aBc74C4);
-    address constant sushiSwapRouter=0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506;
-    address constant wETH=0xd0A1E359811322d97991E03f863a0C30C2cF029C; 
+    ISushiSwapLaunch constant sushiSwapFactory=ISushiSwapLaunch(0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac);
+    address constant sushiSwapRouter=0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F;
+    address constant wETH=0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2; 
     address public governance;
     string public name;
     string public symbol;
@@ -135,7 +135,7 @@ contract UchiToken {
 
 /// @notice Factory for UchiToken deployment.
 contract UchiTokenFactory {
-    ISushiSwapLaunch constant sushiSwapRouter=ISushiSwapLaunch(0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506);
+    ISushiSwapLaunch constant sushiSwapRouter=ISushiSwapLaunch(0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F);
     address public uchiDAO=msg.sender;
 
     mapping(address=>uint) public uchiList;
