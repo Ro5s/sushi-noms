@@ -97,9 +97,9 @@ contract UchiToken {
     
     function transferFrom(address from, address to, uint256 amount) external returns (bool) {
         if(uchiRestricted){require(uchi[from]&&uchi[to],"!uchi");}
+        allowance[from][msg.sender]-=amount;
         balanceOf[from]-=amount;
         balanceOf[to]+=amount;
-        allowance[from][msg.sender]-=amount;
         emit Transfer(from, to, amount);
         return true;
     }
