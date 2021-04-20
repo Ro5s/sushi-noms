@@ -164,15 +164,15 @@ contract UchiTokenFactory {
             market);
         if(market){
             uchiToken.approve(address(sushiSwapRouter), pairDistro);
-            initMarket(address(uchiToken), pairDistro, _uchi[0]);}
+            initMarket(_uchi[0], address(uchiToken), pairDistro);}
         emit DeployUchiToken(address(uchiToken));
     }
     
-    function checkList(address[] calldata _uchi, uint list) private view { // deployment helper to avoid `stack too deep` error
+    function checkList(address[] calldata _uchi, uint list) private view { // deployment helper to avoid 'stack too deep' error
         for(uint i=0;i<_uchi.length;i++){require(uchiList[_uchi[i]]==list,'!listed');}
     }
     
-    function initMarket(address uchiToken, uint pairDistro, address governance) private { // deployment helper to avoid `stack too deep` error
+    function initMarket(address governance, address uchiToken, uint pairDistro) private { // deployment helper to avoid 'stack too deep' error
         sushiSwapRouter.addLiquidityETH{value: msg.value}(uchiToken, pairDistro, 0, 0, governance, 2533930386);
     }
     
