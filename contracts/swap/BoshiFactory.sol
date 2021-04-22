@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
-// BentoSwap - Uniswap V2'x' on BentoBox
+// Boshi - Uniswap V2'x' on BentoBox
 pragma solidity 0.6.12;
 pragma experimental ABIEncoderV2;
 
 // @notice A library for performing various math operations, including overflow/underflow checks and handling binary fixed point numbers,
 // based on awesomeness from DappHub, @boringcrypto and Uniswap V2.
-library BentoSwapMath {
+library BoshiMath {
     uint224 constant Q112 = 2**112;
     
     // encode uint112 as UQ112x112
@@ -38,15 +38,15 @@ library BentoSwapMath {
     
     // **** SAFE MATH **** 
     function add(uint256 a, uint256 b) internal pure returns (uint256 c) {
-        require((c = a + b) >= b, "BentoSwapMath: Add Overflow");
+        require((c = a + b) >= b, "BoshiMath: Add Overflow");
     }
 
     function sub(uint256 a, uint256 b) internal pure returns (uint256 c) {
-        require((c = a - b) <= a, "BentoSwapMath: Underflow");
+        require((c = a - b) <= a, "BoshiMath: Underflow");
     }
 
     function mul(uint256 a, uint256 b) internal pure returns (uint256 c) {
-        require(b == 0 || (c = a * b) / b == a, "BentoSwapMath: Mul Overflow");
+        require(b == 0 || (c = a * b) / b == a, "BoshiMath: Mul Overflow");
     }
 }
 
@@ -111,10 +111,10 @@ contract ERC20Data {
     mapping(address => uint256) public nonces;
 }
 
-interface IERC20 {} contract BentoSwapERC20 is Domain, ERC20Data {
-    using BentoSwapMath for uint256;
+interface IERC20 {} contract BoshiERC20 is Domain, ERC20Data {
+    using BoshiMath for uint256;
     
-    string public constant name = 'BentoSwap LP Token';
+    string public constant name = 'Boshi LP Token';
     string public constant symbol = 'bSLP';
     uint8 public constant decimals = 18;
     uint256 public totalSupply;
@@ -142,9 +142,9 @@ interface IERC20 {} contract BentoSwapERC20 is Domain, ERC20Data {
         // If `amount` is 0, or `msg.sender` is `to` nothing happens
         if (amount != 0) {
             uint256 srcBalance = balanceOf[msg.sender];
-            require(srcBalance >= amount, "BentoSwapERC20: balance too low");
+            require(srcBalance >= amount, "BoshiERC20: balance too low");
             if (msg.sender != to) {
-                require(to != address(0), "BentoSwapERC20: no zero address"); // Moved down so low balance calls safe some gas
+                require(to != address(0), "BoshiERC20: no zero address"); // Moved down so low balance calls safe some gas
 
                 balanceOf[msg.sender] = srcBalance - amount; // Underflow is checked
                 balanceOf[to] += amount; // Can't overflow because totalSupply would be greater than 2^256-1
@@ -167,16 +167,16 @@ interface IERC20 {} contract BentoSwapERC20 is Domain, ERC20Data {
         // If `amount` is 0, or `from` is `to` nothing happens
         if (amount != 0) {
             uint256 srcBalance = balanceOf[from];
-            require(srcBalance >= amount, "BentoSwapERC20: balance too low");
+            require(srcBalance >= amount, "BoshiERC20: balance too low");
 
             if (from != to) {
                 uint256 spenderAllowance = allowance[from][msg.sender];
                 // If allowance is infinite, don't decrease it to save on gas (breaks with EIP-20).
                 if (spenderAllowance != type(uint256).max) {
-                    require(spenderAllowance >= amount, "BentoSwapERC20: allowance too low");
+                    require(spenderAllowance >= amount, "BoshiERC20: allowance too low");
                     allowance[from][msg.sender] = spenderAllowance - amount; // Underflow is checked
                 }
-                require(to != address(0), "BentoSwapERC20: no zero address"); // Moved down so other failed calls save some gas
+                require(to != address(0), "BoshiERC20: no zero address"); // Moved down so other failed calls save some gas
 
                 balanceOf[from] = srcBalance - amount; // Underflow is checked
                 balanceOf[to] += amount; // Can't overflow because totalSupply would be greater than 2^256-1
@@ -449,7 +449,7 @@ interface IBentoBoxV1 {
     ) external returns (uint256 amountOut, uint256 shareOut);
 }
 
-interface IBentoSwapFactory {
+interface IBoshiFactory {
     event PairCreated(address indexed token0, address indexed token1, address pair, uint256);
 
     function feeTo() external view returns (address);
@@ -467,9 +467,9 @@ interface IBentoSwapFactory {
     function setMigrator(address) external;
 }
 
-contract BentoSwapPair is BentoSwapERC20 {
-    using BentoSwapMath for uint256;
-    using BentoSwapMath for uint224;
+contract BoshiPair is BoshiERC20 {
+    using BoshiMath for uint256;
+    using BoshiMath for uint224;
     
     IBentoBoxV1 private constant bento = IBentoBoxV1(0xF5BCE5077908a1b7370B9ae04AdC565EBd643966); // BentoBoxV1 vault
     uint256 public constant MINIMUM_LIQUIDITY = 10**3;
@@ -488,7 +488,7 @@ contract BentoSwapPair is BentoSwapERC20 {
 
     uint256 private unlocked = 1;
     modifier lock() {
-        require(unlocked == 1, 'BentoSwap: LOCKED');
+        require(unlocked == 1, 'Boshi: LOCKED');
         unlocked = 0;
         _;
         unlocked = 1;
@@ -518,20 +518,20 @@ contract BentoSwapPair is BentoSwapERC20 {
 
     // called once by the factory at time of deployment
     function initialize(IERC20 _token0, IERC20 _token1) external {
-        require(msg.sender == factory, 'BentoSwap: FORBIDDEN'); // sufficient check
+        require(msg.sender == factory, 'Boshi: FORBIDDEN'); // sufficient check
         token0 = _token0;
         token1 = _token1;
     }
 
     // update reserves and, on the first call per block, price accumulators
     function _update(uint256 balance0, uint256 balance1, uint112 _reserve0, uint112 _reserve1) private {
-        require(balance0 <= uint112(-1) && balance1 <= uint112(-1), 'BentoSwap: OVERFLOW');
+        require(balance0 <= uint112(-1) && balance1 <= uint112(-1), 'Boshi: OVERFLOW');
         uint32 blockTimestamp = uint32(block.timestamp % 2**32);
         uint32 timeElapsed = blockTimestamp - blockTimestampLast; // overflow is desired
         if (timeElapsed > 0 && _reserve0 != 0 && _reserve1 != 0) {
             // * never overflows, and + overflow is desired
-            price0CumulativeLast += uint256(BentoSwapMath.encode(_reserve1).uqdiv(_reserve0)) * timeElapsed;
-            price1CumulativeLast += uint256(BentoSwapMath.encode(_reserve0).uqdiv(_reserve1)) * timeElapsed;
+            price0CumulativeLast += uint256(BoshiMath.encode(_reserve1).uqdiv(_reserve0)) * timeElapsed;
+            price1CumulativeLast += uint256(BoshiMath.encode(_reserve0).uqdiv(_reserve1)) * timeElapsed;
         }
         reserve0 = uint112(balance0);
         reserve1 = uint112(balance1);
@@ -541,13 +541,13 @@ contract BentoSwapPair is BentoSwapERC20 {
 
     // if fee is on, mint liquidity equivalent to 1/6th of the growth in sqrt(k)
     function _mintFee(uint112 _reserve0, uint112 _reserve1) private returns (bool feeOn) {
-        address feeTo = IBentoSwapFactory(factory).feeTo();
+        address feeTo = IBoshiFactory(factory).feeTo();
         feeOn = feeTo != address(0);
         uint256 _kLast = kLast; // gas savings
         if (feeOn) {
             if (_kLast != 0) {
-                uint256 rootK = BentoSwapMath.sqrt(uint256(_reserve0).mul(_reserve1));
-                uint256 rootKLast = BentoSwapMath.sqrt(_kLast);
+                uint256 rootK = BoshiMath.sqrt(uint256(_reserve0).mul(_reserve1));
+                uint256 rootKLast = BoshiMath.sqrt(_kLast);
                 if (rootK > rootKLast) {
                     uint256 numerator = totalSupply.mul(rootK.sub(rootKLast));
                     uint256 denominator = rootK.mul(5).add(rootKLast);
@@ -571,19 +571,19 @@ contract BentoSwapPair is BentoSwapERC20 {
         bool feeOn = _mintFee(_reserve0, _reserve1);
         uint256 _totalSupply = totalSupply; // gas savings, must be defined here since totalSupply can update in _mintFee
         if (_totalSupply == 0) {
-            address migrator = IBentoSwapFactory(factory).migrator();
+            address migrator = IBoshiFactory(factory).migrator();
             if (msg.sender == migrator) {
                 liquidity = IMigrator(migrator).desiredLiquidity();
                 require(liquidity > 0 && liquidity != uint256(-1), "Bad desired liquidity");
             } else {
                 require(migrator == address(0), "Must not have migrator");
-                liquidity = BentoSwapMath.sqrt(amount0.mul(amount1)).sub(MINIMUM_LIQUIDITY);
+                liquidity = BoshiMath.sqrt(amount0.mul(amount1)).sub(MINIMUM_LIQUIDITY);
                 _mint(address(0), MINIMUM_LIQUIDITY); // permanently lock the first MINIMUM_LIQUIDITY tokens
             }
         } else {
-            liquidity = BentoSwapMath.min(amount0.mul(_totalSupply) / _reserve0, amount1.mul(_totalSupply) / _reserve1);
+            liquidity = BoshiMath.min(amount0.mul(_totalSupply) / _reserve0, amount1.mul(_totalSupply) / _reserve1);
         }
-        require(liquidity > 0, 'BentoSwap: INSUFFICIENT_LIQUIDITY_MINTED');
+        require(liquidity > 0, 'Boshi: INSUFFICIENT_LIQUIDITY_MINTED');
         _mint(to, liquidity);
 
         _update(balance0, balance1, _reserve0, _reserve1);
@@ -604,7 +604,7 @@ contract BentoSwapPair is BentoSwapERC20 {
         uint256 _totalSupply = totalSupply; // gas savings, must be defined here since totalSupply can update in _mintFee
         amount0 = liquidity.mul(balance0) / _totalSupply; // using balances ensures pro-rata distribution
         amount1 = liquidity.mul(balance1) / _totalSupply; // using balances ensures pro-rata distribution
-        require(amount0 > 0 && amount1 > 0, 'BentoSwap: INSUFFICIENT_LIQUIDITY_BURNED');
+        require(amount0 > 0 && amount1 > 0, 'Boshi: INSUFFICIENT_LIQUIDITY_BURNED');
         _burn(address(this), liquidity);
         bento.transfer(IERC20(_token0), address(this), to, amount0);
         bento.transfer(_token1, address(this), to, amount1);
@@ -618,16 +618,16 @@ contract BentoSwapPair is BentoSwapERC20 {
 
     // this low-level function should be called from a contract which performs important safety checks
     function swap(uint256 amount0Out, uint256 amount1Out, address to, bytes calldata data) external lock {
-        require(amount0Out > 0 || amount1Out > 0, 'BentoSwap: INSUFFICIENT_OUTPUT_AMOUNT');
+        require(amount0Out > 0 || amount1Out > 0, 'Boshi: INSUFFICIENT_OUTPUT_AMOUNT');
         (uint112 _reserve0, uint112 _reserve1,) = getReserves(); // gas savings
-        require(amount0Out < _reserve0 && amount1Out < _reserve1, 'BentoSwap: INSUFFICIENT_LIQUIDITY');
+        require(amount0Out < _reserve0 && amount1Out < _reserve1, 'Boshi: INSUFFICIENT_LIQUIDITY');
 
         uint256 balance0;
         uint256 balance1;
         { // scope for _token{0,1}, avoids stack too deep errors
         IERC20 _token0 = token0;
         IERC20 _token1 = token1;
-        require(to != address(_token0) && to != address(_token1), 'BentoSwap: INVALID_TO');
+        require(to != address(_token0) && to != address(_token1), 'Boshi: INVALID_TO');
         if (amount0Out > 0) bento.transfer(_token0, address(this), to, amount0Out); // optimistically transfer tokens
         if (amount1Out > 0) bento.transfer(_token1, address(this), to, amount1Out); // optimistically transfer tokens
         if (data.length > 0) IUniswapV2Callee(to).uniswapV2Call(msg.sender, amount0Out, amount1Out, data);
@@ -636,11 +636,11 @@ contract BentoSwapPair is BentoSwapERC20 {
         }
         uint256 amount0In = balance0 > _reserve0 - amount0Out ? balance0 - (_reserve0 - amount0Out) : 0;
         uint256 amount1In = balance1 > _reserve1 - amount1Out ? balance1 - (_reserve1 - amount1Out) : 0;
-        require(amount0In > 0 || amount1In > 0, 'BentoSwap: INSUFFICIENT_INPUT_AMOUNT');
+        require(amount0In > 0 || amount1In > 0, 'Boshi: INSUFFICIENT_INPUT_AMOUNT');
         { // scope for reserve{0,1}Adjusted, avoids stack too deep errors
         uint256 balance0Adjusted = balance0.mul(1000).sub(amount0In.mul(3));
         uint256 balance1Adjusted = balance1.mul(1000).sub(amount1In.mul(3));
-        require(balance0Adjusted.mul(balance1Adjusted) >= uint256(_reserve0).mul(_reserve1).mul(1000**2), 'BentoSwap: K');
+        require(balance0Adjusted.mul(balance1Adjusted) >= uint256(_reserve0).mul(_reserve1).mul(1000**2), 'Boshi: K');
         }
 
         _update(balance0, balance1, _reserve0, _reserve1);
@@ -648,7 +648,7 @@ contract BentoSwapPair is BentoSwapERC20 {
     }
 }
 
-contract BentoSwapFactory is IBentoSwapFactory {
+contract BoshiFactory is IBoshiFactory {
     address public override feeTo;
     address public override feeToSetter;
     address public override migrator;
@@ -667,20 +667,20 @@ contract BentoSwapFactory is IBentoSwapFactory {
     }
 
     function pairCodeHash() external pure returns (bytes32) {
-        return keccak256(type(BentoSwapPair).creationCode);
+        return keccak256(type(BoshiPair).creationCode);
     }
 
     function createPair(IERC20 tokenA, IERC20 tokenB) external override returns (address pair) {
-        require(tokenA != tokenB, 'BentoSwap: IDENTICAL_ADDRESSES');
+        require(tokenA != tokenB, 'Boshi: IDENTICAL_ADDRESSES');
         (IERC20 token0, IERC20 token1) = tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);
-        require(address(token0) != address(0), 'BentoSwap: ZERO_ADDRESS');
-        require(getPair[token0][token1] == address(0), 'BentoSwap: PAIR_EXISTS'); // single check is sufficient
-        bytes memory bytecode = type(BentoSwapPair).creationCode;
+        require(address(token0) != address(0), 'Boshi: ZERO_ADDRESS');
+        require(getPair[token0][token1] == address(0), 'Boshi: PAIR_EXISTS'); // single check is sufficient
+        bytes memory bytecode = type(BoshiPair).creationCode;
         bytes32 salt = keccak256(abi.encodePacked(token0, token1));
         assembly {
             pair := create2(0, add(bytecode, 32), mload(bytecode), salt)
         }
-        BentoSwapPair(pair).initialize(token0, token1);
+        BoshiPair(pair).initialize(token0, token1);
         getPair[token0][token1] = pair;
         getPair[token1][token0] = pair; // populate mapping in the reverse direction
         allPairs.push(pair);
@@ -689,7 +689,7 @@ contract BentoSwapFactory is IBentoSwapFactory {
     
     // **** GOVERNANCE **** 
     modifier onlyFeeToSetter {
-        require(msg.sender == feeToSetter, 'BentoSwap: FORBIDDEN');
+        require(msg.sender == feeToSetter, 'Boshi: FORBIDDEN');
         _;
     }
 
