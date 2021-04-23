@@ -1,20 +1,11 @@
 /// SPDX-License-Identifier: MIT
 pragma solidity 0.6.12;
 
+/// @notice Interface for SushiSwap pair creation and ETH liquidity provision.
 interface ISushiSwapLaunch {
+    function approve(address to, uint amount) external returns (bool); 
+    function transferFrom(address from, address to, uint amount) external returns (bool);
     function createPair(address tokenA, address tokenB) external returns (address pair);
-    
-    function addLiquidity(
-        address tokenA,
-        address tokenB,
-        uint amountADesired,
-        uint amountBDesired,
-        uint amountAMin,
-        uint amountBMin,
-        address to,
-        uint deadline
-    ) external returns (uint amountA, uint amountB, uint liquidity);
-    
     function addLiquidityETH(
         address token,
         uint amountTokenDesired,
