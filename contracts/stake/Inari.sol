@@ -720,11 +720,11 @@ contract InariV1 is BoringBatchableWithDai, Sushiswap_ZapIn_General_V3 {
     /************
     KASHI HELPERS 
     ************/
-    function addAssetBalanceToKashi(IKashi kashiPair, address to, bool skim) external {
+    function assetBalanceToKashi(IKashi kashiPair, address to, bool skim) external {
         kashiPair.addAsset(to, skim, bento.balanceOf(kashiPair.asset(), address(this)));
     }
     
-    function removeAssetBalanceFromKashi(address kashiPair, address to) external {
+    function assetBalanceFromKashi(address kashiPair, address to) external {
         IKashi(kashiPair).removeAsset(to, IERC20(kashiPair).balanceOf(address(this)));
     }
     
