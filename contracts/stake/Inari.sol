@@ -327,7 +327,6 @@ contract Sushiswap_ZapIn_General_V3 {
      @param _minPoolTokens Reverts if less tokens received than this
      @param _swapTarget Excecution target for the first swap
      @param swapData Dex quote data
-     @param transferResidual Set false to save gas by donating the residual remaining after a Zap
      @return Amount of LP bought
      */
     function zapIn(
@@ -337,8 +336,7 @@ contract Sushiswap_ZapIn_General_V3 {
         uint256 _amount,
         uint256 _minPoolTokens,
         address _swapTarget,
-        bytes calldata swapData,
-        bool transferResidual
+        bytes calldata swapData
     ) external payable returns (uint256) {
         uint256 toInvest = _pullTokens(
             _FromTokenContractAddress,
@@ -349,8 +347,7 @@ contract Sushiswap_ZapIn_General_V3 {
             _pairAddress,
             toInvest,
             _swapTarget,
-            swapData,
-            transferResidual
+            swapData
         );
         require(LPBought >= _minPoolTokens, "ERR: High Slippage");
         emit ZapIn(to, _pairAddress, LPBought);
@@ -382,8 +379,7 @@ contract Sushiswap_ZapIn_General_V3 {
         address _pairAddress,
         uint256 _amount,
         address _swapTarget,
-        bytes memory swapData,
-        bool transferResidual
+        bytes memory swapData
     ) internal returns (uint256) {
         uint256 intermediateAmt;
         address intermediateToken;
@@ -419,8 +415,7 @@ contract Sushiswap_ZapIn_General_V3 {
                 _ToSushipoolToken0,
                 _ToSushipoolToken1,
                 token0Bought,
-                token1Bought,
-                transferResidual
+                token1Bought
             );
     }
 
@@ -428,8 +423,7 @@ contract Sushiswap_ZapIn_General_V3 {
         address _ToUnipoolToken0,
         address _ToUnipoolToken1,
         uint256 token0Bought,
-        uint256 token1Bought,
-        bool transferResidual
+        uint256 token1Bought
     ) internal returns (uint256) {
         IERC20(_ToUnipoolToken0).approve(address(sushiSwapRouter), 0);
         IERC20(_ToUnipoolToken1).approve(address(sushiSwapRouter), 0);
@@ -452,7 +446,6 @@ contract Sushiswap_ZapIn_General_V3 {
             address(this),
             deadline
         );
-        if (transferResidual) {
             // Returning Residue in token0, if any.
             if (token0Bought.sub(amountA) > 0) {
                 IERC20(_ToUnipoolToken0).safeTransfer(
@@ -467,7 +460,6 @@ contract Sushiswap_ZapIn_General_V3 {
                     token1Bought.sub(amountB)
                 );
             }
-        }
         return LP;
     }
 
@@ -697,13 +689,6 @@ contract InariV1 is BoringBatchableWithDai, Sushiswap_ZapIn_General_V3 {
     /************
     SUSHI HELPERS 
     ************/
-    /// @notice Stake SUSHI `amount` into xSushi for benefit of `to` by call to `sushiBar`.
-    function stakeSushi(address to, uint256 amount) external {
-        sushiToken.safeTransferFrom(msg.sender, address(this), amount); // deposit `msg.sender` SUSHI `amount` into this contract
-        ISushiBarBridge(sushiBar).enter(amount); // stake deposited SUSHI into `sushiBar` xSUSHI
-        IERC20(sushiBar).safeTransfer(to, IERC20(sushiBar).balanceOf(address(this))); // transfer resulting xSUSHI to `to`
-    }
-    
     /// @notice Stake SUSHI local balance into xSushi for benefit of `to` by call to `sushiBar`.
     function stakeSushiBalance(address to) external {
         ISushiBarBridge(sushiBar).enter(sushiToken.balanceOf(address(this))); // stake local SUSHI into `sushiBar` xSUSHI
@@ -837,8 +822,7 @@ contract InariV1 is BoringBatchableWithDai, Sushiswap_ZapIn_General_V3 {
         uint256 _amount,
         uint256 _minPoolTokens,
         address _swapTarget,
-        bytes calldata swapData,
-        bool transferResidual
+        bytes calldata swapData
     ) external payable returns (uint256) {
         uint256 toInvest = _pullTokens(
             _FromTokenContractAddress,
@@ -849,8 +833,7 @@ contract InariV1 is BoringBatchableWithDai, Sushiswap_ZapIn_General_V3 {
             _pairAddress,
             toInvest,
             _swapTarget,
-            swapData,
-            transferResidual
+            swapData
         );
         require(LPBought >= _minPoolTokens, "ERR: High Slippage");
         emit ZapIn(to, _pairAddress, LPBought);
@@ -1018,6 +1001,18 @@ contract InariV1 is BoringBatchableWithDai, Sushiswap_ZapIn_General_V3 {
            █ █ █     █  █        
             ▀ ▀     █    ▀       
                    ▀     */
+    /// @notice SushiSwap `msg.value` ETH to SUSHI for benefit of `to`.
+    function ethToSushi(address to) external payable { // INARIZUSHI
+        (uint256 reserve0, uint256 reserve1, ) = sushiSwapSushiETHPair.getReserves();
+        uint256 amountInWithFee = msg.value.mul(997);
+        uint256 amountOut =
+            amountInWithFee.mul(reserve0) /
+            reserve1.mul(1000).add(amountInWithFee);
+        IWETH(wETH).deposit{value: msg.value}();
+        IERC20(wETH).safeTransfer(address(sushiSwapSushiETHPair), msg.value);
+        sushiSwapSushiETHPair.swap(amountOut, 0, to, "");
+    }
+    
     /// @notice SushiSwap `fromToken` `amountIn` to `toToken` for benefit of `to` - if `fromToken` is `wETH`, convert `msg.value` to `wETH`.
     function swap(address fromToken, address toToken, address to, uint256 amountIn) external payable returns (uint256 amountOut) {
         (address token0, address token1) = fromToken < toToken ? (fromToken, toToken) : (toToken, fromToken);
