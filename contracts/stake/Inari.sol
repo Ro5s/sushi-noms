@@ -661,6 +661,8 @@ contract Inari is BoringBatchableWithDai, Sushiswap_ZapIn_General_V3 {
     /**********
     ETH HELPERS 
     **********/
+    receive() external payable {}
+    
     function depositETH() external payable {}
     
     function withdrawETHBalance(address to) external {
@@ -684,12 +686,10 @@ contract Inari is BoringBatchableWithDai, Sushiswap_ZapIn_General_V3 {
     /**********
     TKN HELPERS 
     **********/
-    /// @notice Token deposit function for `batch()` into strategies. 
     function depositToken(IERC20 token, uint256 amount) external {
         IERC20(token).safeTransferFrom(msg.sender, address(this), amount); 
     }
 
-    /// @notice Token local balance withdraw function for `batch()` into strategies. 
     function withdrawTokenBalance(IERC20 token, address to) external {
         IERC20(token).safeTransfer(to, token.balanceOf(address(this))); 
     }
@@ -724,8 +724,8 @@ contract Inari is BoringBatchableWithDai, Sushiswap_ZapIn_General_V3 {
         kashiPair.addAsset(to, skim, bento.balanceOf(kashiPair.asset(), address(this)));
     }
     
-    function removeAssetFromKashi(IKashi kashiPair, address to, uint256 fraction) external {
-        kashiPair.removeAsset(to, fraction);
+    function removeAssetBalanceFromKashi(address kashiPair, address to) external {
+        IKashi(kashiPair).removeAsset(to, IERC20(kashiPair).balanceOf(address(this)));
     }
     
 /*
@@ -979,8 +979,6 @@ contract Inari is BoringBatchableWithDai, Sushiswap_ZapIn_General_V3 {
            █ █ █     █  █        
             ▀ ▀     █    ▀       
                    ▀     */
-    receive() external payable {}
-    
     /// @notice SushiSwap `msg.value` ETH to stake SUSHI into xSUSHI and BENTO for benefit of `to`.
     function ethToStakeSushiToBento(address to) external payable { // INARIZUSHI
         (uint256 reserve0, uint256 reserve1, ) = sushiSwapSushiETHPair.getReserves();
