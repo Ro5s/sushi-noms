@@ -88,6 +88,19 @@ interface IDaiPermit {
     ) external;
 }
 
+/// @notice Interface for depositing and withdrawing assets from KASHI.
+interface IKashi {
+    function asset() external returns (IERC20);
+    
+    function addAsset(
+        address to,
+        bool skim,
+        uint256 share
+    ) external returns (uint256 fraction);
+    
+    function removeAsset(address to, uint256 fraction) external returns (uint256 share);
+}
+
 /// @notice Interface for depositing into and withdrawing from SushiBar.
 interface ISushiBarBridge { 
     function enter(uint256 amount) external;
@@ -96,7 +109,6 @@ interface ISushiBarBridge {
 
 /// @notice Interface for SushiSwap.
 interface ISushiSwap {
-    function deposit() external payable; // wETH helper
     function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast);
     function swap(uint amount0Out, uint amount1Out, address to, bytes calldata data) external;
 }
@@ -265,6 +277,7 @@ interface ISushiLiquidityZap {
     function token0() external pure returns (address);
     function token1() external pure returns (address);
     function getReserves() external view returns (uint112 _reserve0, uint112 _reserve1, uint32 _blockTimestampLast);
+    function burn(address to) external returns (uint amount0, uint amount1);
        
     function addLiquidity(
         address tokenA,
@@ -300,11 +313,10 @@ contract Sushiswap_ZapIn_General_V3 {
     address constant sushiSwapFactory = 0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac; // SushiSwap factory contract
     ISushiLiquidityZap constant sushiSwapRouter = ISushiLiquidityZap(0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F);
     address constant ETHAddress = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
-    address constant wETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2; // ETH wrapper contract (v9)
     uint256 constant deadline = 0xf000000000000000000000000000000000000000000000000000000000000000;
     bytes32 constant pairCodeHash = 0xe18a34eb0e04b04f7a0ac29a6e80748dca96319b42c54d679cb821dca90c6303; // SushiSwap pair code hash
 
-    event zapIn(address sender, address pool, uint256 tokensRec);
+    event ZapIn(address sender, address pool, uint256 tokensRec);
 
     /**
      @notice This function is used to invest in given SushiSwap pair through ETH/ERC20 Tokens
@@ -318,7 +330,7 @@ contract Sushiswap_ZapIn_General_V3 {
      @param transferResidual Set false to save gas by donating the residual remaining after a Zap
      @return Amount of LP bought
      */
-    function ZapIn(
+    function zapIn(
         address to,
         address _FromTokenContractAddress,
         address _pairAddress,
@@ -341,7 +353,7 @@ contract Sushiswap_ZapIn_General_V3 {
             transferResidual
         );
         require(LPBought >= _minPoolTokens, "ERR: High Slippage");
-        emit zapIn(to, _pairAddress, LPBought);
+        emit ZapIn(to, _pairAddress, LPBought);
         IERC20(_pairAddress).safeTransfer(to, LPBought);
         return LPBought;
     }
@@ -587,6 +599,15 @@ contract Sushiswap_ZapIn_General_V3 {
         )[path.length - 1];
         require(tokenBought > 0, "Error Swapping Tokens 2");
     }
+    
+    function zapOut(
+        address pair,
+        address to,
+        uint256 amount
+    ) external {
+        IERC20(pair).safeTransferFrom(msg.sender, address(pair), amount); // pull `amount` to `pair`
+        ISushiLiquidityZap(pair).burn(to); // trigger burn to redeem liquidity for `to`
+    }
 }
 
 /// @notice Interface for SUSHI MasterChef v2.
@@ -595,7 +616,13 @@ interface IMasterChefv2 {
     function deposit(uint256 pid, uint256 amount, address to) external;
 }
 
-/// @notice Contract that batches SUSHI staking and DeFi strategies - V1 (iroirona).
+/// @notice Interface for ETH wrapper contract (v9).
+interface IWETH {
+    function deposit() external payable;
+    function withdraw(uint256) external;
+}
+
+/// @notice Contract that batches SUSHI staking and DeFi strategies - V1 iroirona.
 contract Inari is BoringBatchableWithDai, Sushiswap_ZapIn_General_V3 {
     using SafeMath for uint256;
     using BoringERC20 for IERC20;
@@ -610,6 +637,7 @@ contract Inari is BoringBatchableWithDai, Sushiswap_ZapIn_General_V3 {
     IBentoBridge constant bento = IBentoBridge(0xF5BCE5077908a1b7370B9ae04AdC565EBd643966); // BENTO vault contract
     address constant crSushiToken = 0x338286C0BC081891A4Bda39C7667ae150bf5D206; // crSUSHI staking contract for SUSHI
     address constant crXSushiToken = 0x228619CCa194Fbe3Ebeb2f835eC1eA5080DaFbb2; // crXSUSHI staking contract for xSUSHI
+    address constant wETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2; // ETH wrapper contract (v9)
 
     /// @notice Initialize this Inari contract.
     constructor() public {
@@ -625,9 +653,45 @@ contract Inari is BoringBatchableWithDai, Sushiswap_ZapIn_General_V3 {
     
     /// @notice Admin function to set `masterChefv2` and burn `governance` role.
     function setMasterChefv2(IMasterChefv2 _masterChefv2) external {
-        require(msg.sender == governance,'!governance');
+        require(msg.sender == governance, '!governance');
         masterChefv2 = _masterChefv2;
         governance = address(0);
+    }
+    
+    /**********
+    ETH HELPERS 
+    **********/
+    function depositETH() external payable {}
+    
+    function withdrawETHBalance(address to) external {
+        (bool success, ) = to.call{value: address(this).balance}("");
+        require(success, '!ethCall');
+    }
+    
+    /***********
+    WETH HELPERS 
+    ***********/
+    function depositBalanceToWETH() external payable {
+        IWETH(wETH).deposit{value: address(this).balance}();
+    }
+    
+    function withdrawBalanceFromWETH(address to) external {
+        IWETH(wETH).withdraw(IERC20(wETH).balanceOf(address(this)));
+        (bool success, ) = to.call{value: address(this).balance}("");
+        require(success, '!ethCall');
+    }
+    
+    /**********
+    TKN HELPERS 
+    **********/
+    /// @notice Token deposit function for `batch()` into strategies. 
+    function depositToken(IERC20 token, uint256 amount) external {
+        IERC20(token).safeTransferFrom(msg.sender, address(this), amount); 
+    }
+
+    /// @notice Token local balance withdraw function for `batch()` into strategies. 
+    function withdrawTokenBalance(IERC20 token, address to) external {
+        IERC20(token).safeTransfer(to, token.balanceOf(address(this))); 
     }
 
     /************
@@ -649,31 +713,21 @@ contract Inari is BoringBatchableWithDai, Sushiswap_ZapIn_General_V3 {
     /***********
     CHEF HELPERS 
     ***********/
-    function toMasterChefv2(uint256 pid, uint256 amount, address to) external {
-        masterChefv2.deposit(pid, amount, to);
-    }
-    
     function balanceToMasterChefv2(IERC20 lpToken, uint256 pid, address to) external {
         masterChefv2.deposit(pid, lpToken.balanceOf(address(this)), to);
     }
-
-    /**********
-    TKN HELPERS 
-    **********/
-    /// @notice Token deposit function for `batch()` into strategies. 
-    function depositToken(IERC20 token, uint256 amount) external {
-        IERC20(token).safeTransferFrom(msg.sender, address(this), amount); 
-    }
-
-    /// @notice Token withdraw function for `batch()` into strategies. 
-    function withdrawToken(IERC20 token, address to, uint256 amount) external {
-        IERC20(token).safeTransfer(to, amount); 
+    
+    /************
+    KASHI HELPERS 
+    ************/
+    function addAssetBalanceToKashi(IKashi kashiPair, address to, bool skim) external {
+        kashiPair.addAsset(to, skim, bento.balanceOf(kashiPair.asset(), address(this)));
     }
     
-    /// @notice Token local balance withdraw function for `batch()` into strategies. 
-    function withdrawTokenBalance(IERC20 token, address to) external {
-        IERC20(token).safeTransfer(to, token.balanceOf(address(this))); 
+    function removeAssetFromKashi(IKashi kashiPair, address to, uint256 fraction) external {
+        kashiPair.removeAsset(to, fraction);
     }
+    
 /*
 ██   ██       ▄   ▄███▄   
 █ █  █ █       █  █▀   ▀  
@@ -686,18 +740,10 @@ contract Inari is BoringBatchableWithDai, Sushiswap_ZapIn_General_V3 {
     /***********
     AAVE HELPERS 
     ***********/
-    function toAave(address underlying, address to, uint256 amount) external {
-        aave.deposit(underlying, amount, to, 0); 
-    }
-
     function balanceToAave(address underlying, address to) external {
         aave.deposit(underlying, IERC20(underlying).balanceOf(address(this)), to, 0); 
     }
-    
-    function fromAave(address underlying, address to, uint256 amount) external {
-        aave.withdraw(underlying, amount, to); 
-    }
-    
+
     function balanceFromAave(address aToken, address to) external {
         address underlying = IAaveBridge(aToken).UNDERLYING_ASSET_ADDRESS(); // sanity check for `underlying` token
         aave.withdraw(underlying, IERC20(aToken).balanceOf(address(this)), to); 
@@ -750,7 +796,7 @@ contract Inari is BoringBatchableWithDai, Sushiswap_ZapIn_General_V3 {
     SUSHI -> XSUSHI -> AAVE 
     **********************/
     /// @notice Stake SUSHI `amount` into aXSUSHI for benefit of `to` by batching calls to `sushiBar` and `aave`.
-    function stakeSushiToAave(address to, uint256 amount) external {
+    function stakeSushiToAave(address to, uint256 amount) external { // SAAVE
         sushiToken.safeTransferFrom(msg.sender, address(this), amount); // deposit `msg.sender` SUSHI `amount` into this contract
         ISushiBarBridge(sushiBar).enter(amount); // stake deposited SUSHI into `sushiBar` xSUSHI
         aave.deposit(sushiBar, IERC20(sushiBar).balanceOf(address(this)), to, 0); // stake resulting xSUSHI into `aave` aXSUSHI for `to`
@@ -786,16 +832,8 @@ contract Inari is BoringBatchableWithDai, Sushiswap_ZapIn_General_V3 {
     /************
     BENTO HELPERS 
     ************/
-    function toBento(IERC20 token, address to, uint256 amount) external {
-        bento.deposit(token, address(this), to, amount, 0); 
-    }
-    
     function balanceToBento(IERC20 token, address to) external {
         bento.deposit(token, address(this), to, token.balanceOf(address(this)), 0); 
-    }
-    
-    function fromBento(IERC20 token, address to, uint256 amount) external {
-        bento.withdraw(token, msg.sender, to, amount, 0); 
     }
     
     function balanceFromBento(IERC20 token, address to) external {
@@ -803,7 +841,7 @@ contract Inari is BoringBatchableWithDai, Sushiswap_ZapIn_General_V3 {
     }
     
     function ethToBento(address to) external payable {
-        ISushiSwap(wETH).deposit{value: msg.value}();
+        IWETH(wETH).deposit{value: msg.value}();
         bento.deposit(IERC20(wETH), address(this), to, msg.value, 0); 
     }
 
@@ -838,19 +876,11 @@ contract Inari is BoringBatchableWithDai, Sushiswap_ZapIn_General_V3 {
     /***********
     COMP HELPERS 
     ***********/
-    function toCompound(ICompoundBridge cToken, uint256 underlyingAmount) external {
-        cToken.mint(underlyingAmount); 
-    }
-
     function balanceToCompound(ICompoundBridge cToken) external {
         IERC20 underlying = IERC20(ICompoundBridge(cToken).underlying()); // sanity check for `underlying` token
         cToken.mint(underlying.balanceOf(address(this)));
     }
-    
-    function fromCompound(ICompoundBridge cToken, uint256 cTokenAmount) external {
-        ICompoundBridge(cToken).redeem(cTokenAmount);
-    }
-    
+
     function balanceFromCompound(address cToken) external {
         ICompoundBridge(cToken).redeem(IERC20(cToken).balanceOf(address(this)));
     }
@@ -901,7 +931,7 @@ contract Inari is BoringBatchableWithDai, Sushiswap_ZapIn_General_V3 {
     SUSHI -> XSUSHI -> CREAM 
     ***********************/
     /// @notice Stake SUSHI `amount` into crXSUSHI for benefit of `to` by batching calls to `sushiBar` and `crXSushiToken`.
-    function stakeSushiToCream(address to, uint256 amount) external {
+    function stakeSushiToCream(address to, uint256 amount) external { // SCREAM
         sushiToken.safeTransferFrom(msg.sender, address(this), amount); // deposit `msg.sender` SUSHI `amount` into this contract
         ISushiBarBridge(sushiBar).enter(amount); // stake deposited SUSHI `amount` into `sushiBar` xSUSHI
         ICompoundBridge(crXSushiToken).mint(IERC20(sushiBar).balanceOf(address(this))); // stake resulting xSUSHI into crXSUSHI
@@ -949,22 +979,24 @@ contract Inari is BoringBatchableWithDai, Sushiswap_ZapIn_General_V3 {
            █ █ █     █  █        
             ▀ ▀     █    ▀       
                    ▀     */
-    /// @notice SushiSwap ETH to stake SUSHI into xSUSHI and BENTO for benefit of `msg.sender`.
-    receive() external payable { // INARIZUSHI
+    receive() external payable {}
+    
+    /// @notice SushiSwap `msg.value` ETH to stake SUSHI into xSUSHI and BENTO for benefit of `to`.
+    function ethToStakeSushiToBento(address to) external payable { // INARIZUSHI
         (uint256 reserve0, uint256 reserve1, ) = sushiSwapSushiETHPair.getReserves();
         uint256 amountInWithFee = msg.value.mul(997);
         uint256 amountOut =
             amountInWithFee.mul(reserve0) /
             reserve1.mul(1000).add(amountInWithFee);
-        ISushiSwap(wETH).deposit{value: msg.value}();
+        IWETH(wETH).deposit{value: msg.value}();
         IERC20(wETH).safeTransfer(address(sushiSwapSushiETHPair), msg.value);
         sushiSwapSushiETHPair.swap(amountOut, 0, address(this), "");
         ISushiBarBridge(sushiBar).enter(sushiToken.balanceOf(address(this))); // stake resulting SUSHI into `sushiBar` xSUSHI
-        bento.deposit(IERC20(sushiBar), address(this), msg.sender, IERC20(sushiBar).balanceOf(address(this)), 0); // stake resulting xSUSHI into BENTO for `msg.sender`
+        bento.deposit(IERC20(sushiBar), address(this), to, IERC20(sushiBar).balanceOf(address(this)), 0); // stake resulting xSUSHI into BENTO for `msg.sender`
     }
     
-    /// @notice SushiSwap `fromToken` `amountIn` to `toToken` for benefit of `to`.
-    function swap(address fromToken, address toToken, address to, uint256 amountIn) external returns (uint256 amountOut) {
+    /// @notice SushiSwap `fromToken` `amountIn` to `toToken` for benefit of `to` - if `fromToken` is `wETH`, convert `msg.value` to `wETH`.
+    function swap(address fromToken, address toToken, address to, uint256 amountIn) external payable returns (uint256 amountOut) {
         (address token0, address token1) = fromToken < toToken ? (fromToken, toToken) : (toToken, fromToken);
         ISushiSwap pair =
             ISushiSwap(
@@ -974,7 +1006,11 @@ contract Inari is BoringBatchableWithDai, Sushiswap_ZapIn_General_V3 {
             );
         (uint256 reserve0, uint256 reserve1, ) = pair.getReserves();
         uint256 amountInWithFee = amountIn.mul(997);
-        IERC20(fromToken).safeTransferFrom(msg.sender, address(this), amountIn);
+        if (fromToken == wETH) {
+            require(msg.value == amountIn, 'value must match'); 
+            IWETH(wETH).deposit{value: msg.value}();
+        } else {
+            IERC20(fromToken).safeTransferFrom(msg.sender, address(this), amountIn);}
         if (toToken > fromToken) {
             amountOut =
                 amountInWithFee.mul(reserve1) /
@@ -1013,33 +1049,6 @@ contract Inari is BoringBatchableWithDai, Sushiswap_ZapIn_General_V3 {
                 amountInWithFee.mul(reserve0) /
                 reserve1.mul(1000).add(amountInWithFee);
             IERC20(fromToken).safeTransfer(address(pair), amountIn);
-            pair.swap(amountOut, 0, to, "");
-        }
-    }
-    
-    /// @notice SushiSwap ETH `msg.value` to `toToken` for benefit of `to`.
-    function swapETH(address toToken, address to) external payable returns (uint256 amountOut) {
-        (address token0, address token1) = wETH < toToken ? (wETH, toToken) : (toToken, wETH);
-        ISushiSwap pair =
-            ISushiSwap(
-                uint256(
-                    keccak256(abi.encodePacked(hex"ff", sushiSwapFactory, keccak256(abi.encodePacked(token0, token1)), pairCodeHash))
-                )
-            );
-        (uint256 reserve0, uint256 reserve1, ) = pair.getReserves();
-        uint256 amountInWithFee = msg.value.mul(997);
-        ISushiSwap(wETH).deposit{value: msg.value}();
-        if (toToken > wETH) {
-            amountOut =
-                amountInWithFee.mul(reserve1) /
-                reserve0.mul(1000).add(amountInWithFee);
-            IERC20(wETH).safeTransfer(address(pair), msg.value);
-            pair.swap(0, amountOut, to, "");
-        } else {
-            amountOut =
-                amountInWithFee.mul(reserve0) /
-                reserve1.mul(1000).add(amountInWithFee);
-            IERC20(wETH).safeTransfer(address(pair), msg.value);
             pair.swap(amountOut, 0, to, "");
         }
     }
