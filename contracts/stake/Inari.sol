@@ -1000,10 +1000,10 @@ contract InariV1 is BoringBatchableWithDai, Sushiswap_ZapIn_General_V3 {
             ▀ ▀     █    ▀       
                    ▀     */
     /// @notice SushiSwap ETH to stake SUSHI into xSUSHI for benefit of `to`. 
-    function ethStakeSushi(address to) external payable returns (uint256 amountOut) { // SWAP `N STAKE
+    function ethStakeSushi(address to) external payable { // SWAP `N STAKE
         (uint256 reserve0, uint256 reserve1, ) = sushiSwapSushiETHPair.getReserves();
         uint256 amountInWithFee = msg.value.mul(997);
-        amountOut =
+        uint256 amountOut =
             amountInWithFee.mul(reserve0) /
             reserve1.mul(1000).add(amountInWithFee);
         IWETH(wETH).deposit{value: msg.value}();
