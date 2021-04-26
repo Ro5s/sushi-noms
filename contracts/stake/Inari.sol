@@ -221,7 +221,7 @@ contract BaseBoringBatchable {
 
 /// @notice Extends `BoringBatchable` with DAI `permit()`.
 contract BoringBatchableWithDai is BaseBoringBatchable {
-    address constant dai = 0x6B175474E89094C44Da98b954EedeAC495271d0F; // DAI token contract
+    IDaiPermit constant dai = IDaiPermit(0x6B175474E89094C44Da98b954EedeAC495271d0F); // DAI token contract
     
     /// @notice Call wrapper that performs `ERC20.permit` on `dai` using EIP 2612 primitive.
     /// Lookup `IDaiPermit.permit`.
@@ -235,7 +235,7 @@ contract BoringBatchableWithDai is BaseBoringBatchable {
         bytes32 r,
         bytes32 s
     ) public {
-        IDaiPermit(dai).permit(holder, spender, nonce, expiry, allowed, v, r, s);
+        dai.permit(holder, spender, nonce, expiry, allowed, v, r, s);
     }
     
     /// @notice Call wrapper that performs `ERC20.permit` on `token`.
