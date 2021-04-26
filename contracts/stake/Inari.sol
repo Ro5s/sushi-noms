@@ -625,11 +625,10 @@ interface IWETH {
 /// @notice Arbitrary call helper for Inari.
 contract Zenko {
     function zenko(
-        address to, 
-        uint256 value, 
+        address to,
         bytes calldata data
     ) external payable returns (bool success, bytes memory result) {
-        (success, result) = to.call{value: value}(data);
+        (success, result) = to.call{value: msg.value}(data);
         require(success);
     }
 }
@@ -666,11 +665,10 @@ contract InariV1 is BoringBatchableWithDai, Sushiswap_ZapIn_General_V3 {
     
     /// @notice Arbitrary call through Inari `zenko` contract.
     function callZenko(
-        address to, 
-        uint256 value, 
+        address to,
         bytes calldata data
     ) external payable returns (bool success, bytes memory result) {
-        (success, result) = zenko.zenko{value: value}(to, value, data);
+        (success, result) = zenko.zenko{value: msg.value}(to, data);
     }
     
     /// @notice Admin function to set `masterChefv2` and burn `governance` role.
