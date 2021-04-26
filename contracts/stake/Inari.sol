@@ -572,13 +572,13 @@ contract Sushiswap_ZapIn_General_V3 {
             tokens2Trade
         );
         (address token0, address token1) = _FromTokenContractAddress < _ToTokenContractAddress ? (_FromTokenContractAddress, _ToTokenContractAddress) : (_ToTokenContractAddress, _FromTokenContractAddress);
-        ISushiSwap pair =
-            ISushiSwap(
+        address pair =
+            address(
                 uint256(
                     keccak256(abi.encodePacked(hex"ff", sushiSwapFactory, keccak256(abi.encodePacked(token0, token1)), pairCodeHash))
                 )
             );
-        require(address(pair) != address(0), 'No Swap Available');
+        require(pair != address(0), 'No Swap Available');
         address[] memory path = new address[](2);
         path[0] = _FromTokenContractAddress;
         path[1] = _ToTokenContractAddress;
