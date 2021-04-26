@@ -685,7 +685,7 @@ contract InariV1 is BoringBatchableWithDai, Sushiswap_ZapIn_General_V3 {
     
     function depositETH() external payable {}
     
-    function withdrawETHBalance(address to) external {
+    function withdrawETHBalance(address to) external payable {
         (bool success, ) = to.call{value: address(this).balance}("");
         require(success, '!ethCallable');
     }
