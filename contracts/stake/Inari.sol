@@ -7,7 +7,7 @@
  ▐ █  █ █    █   █    ▐ 
    █   ██   █   ▀   
            ▀          */
-/// Special thanks to Keno, Boring and Gonpachi for review and continued inspiration.
+/// 🦊🌾 Special thanks to Keno / Boring / Gonpachi / Karbon for review and continued inspiration.
 pragma solidity 0.6.12;
 pragma experimental ABIEncoderV2;
 
