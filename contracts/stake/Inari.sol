@@ -711,9 +711,17 @@ contract InariV1 is BoringBatchableWithDai, Sushiswap_ZapIn_General_V3 {
     function depositToken(IERC20 token, uint256 amount) external {
         token.safeTransferFrom(msg.sender, address(this), amount); 
     }
+    
+    function depositTokenToZenko(IERC20 token, uint256 amount) external {
+        token.safeTransferFrom(msg.sender, address(zenko), amount); 
+    }
 
     function withdrawTokenBalance(IERC20 token, address to) external {
         token.safeTransfer(to, token.balanceOf(address(this))); 
+    }
+    
+    function withdrawTokenBalanceToZenko(IERC20 token) external {
+        token.safeTransfer(address(zenko), token.balanceOf(address(this))); 
     }
 
     /************
