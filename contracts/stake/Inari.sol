@@ -629,7 +629,7 @@ contract Zenko {
         bytes calldata data
     ) external payable returns (bool success, bytes memory result) {
         (success, result) = to.call{value: msg.value}(data);
-        require(success);
+        require(success, '!zen');
     }
 }
 
