@@ -874,7 +874,11 @@ contract InariV1 is BoringBatchableWithDai, Sushiswap_ZapIn_General_V3 {
     BENTO HELPERS 
     ************/
     function balanceToBento(IERC20 token, address to) external payable returns (uint256 amountOut, uint256 shareOut) {
-        (amountOut, shareOut) = bento.deposit{value: msg.value}(token, address(this), to, token.balanceOf(address(this)), 0); 
+        if (address(token) == address(0)) {
+            (amountOut, shareOut) = bento.deposit{value: address(this).balance}(IERC20(wETH), address(this), to, address(this).balance, 0); 
+        } else {
+            (amountOut, shareOut) = bento.deposit(token, address(this), to, token.balanceOf(address(this)), 0); 
+        }
     }
     
     function fromBento(IERC20 token, address to, uint256 amount) external returns (uint256 amountOut, uint256 shareOut) {
