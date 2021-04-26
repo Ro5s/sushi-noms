@@ -664,7 +664,7 @@ contract InariV1 is BoringBatchableWithDai, Sushiswap_ZapIn_General_V3 {
         }
     }
     
-    /// @notice Arbitrary call batching through Inari `zenko` contract.
+    /// @notice Arbitrary call through Inari `zenko` contract.
     function callZenko(
         address to, 
         uint256 value, 
