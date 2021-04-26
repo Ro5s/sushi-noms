@@ -858,8 +858,8 @@ contract InariV1 is BoringBatchableWithDai, Sushiswap_ZapIn_General_V3 {
         }
     }
     
-    function fromBento(IERC20 token, address to, uint256 amount) external returns (uint256 amountOut, uint256 shareOut) {
-        (amountOut, shareOut) = bento.withdraw(token, msg.sender, to, amount, 0); 
+    function fromBento(IERC20 token, uint256 amount) external returns (uint256 amountOut, uint256 shareOut) {
+        (amountOut, shareOut) = bento.withdraw(token, msg.sender, address(this), amount, 0); 
     }
     
     function balanceFromBento(IERC20 token, address to) external returns (uint256 amountOut, uint256 shareOut) {
