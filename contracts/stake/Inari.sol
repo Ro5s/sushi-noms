@@ -1013,7 +1013,7 @@ contract InariV1 is BoringBatchableWithDai, Sushiswap_ZapIn_General_V3 {
         IERC20(sushiBar).safeTransfer(to, IERC20(sushiBar).balanceOf(address(this))); // transfer resulting xSUSHI to `to`
     }
     
-    /// @notice SushiSwap `fromToken` `amountIn` to `toToken` for benefit of `to` - if `fromToken` is `wETH`, convert `msg.value` to `wETH`.
+    /// @notice SushiSwap `fromToken` `amountIn` to `toToken` for benefit of `to`.
     function swap(address fromToken, address toToken, address to, uint256 amountIn) external returns (uint256 amountOut) {
         (address token0, address token1) = fromToken < toToken ? (fromToken, toToken) : (toToken, fromToken);
         ISushiSwap pair =
