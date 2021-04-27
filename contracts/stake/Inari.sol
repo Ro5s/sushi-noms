@@ -664,21 +664,20 @@ contract InariV1 is BoringBatchableWithDai, Sushiswap_ZapIn_General_V3 {
     
     function withdrawETHBalance(address to) external payable {
         (bool success, ) = to.call{value: address(this).balance}("");
-        require(success, '!ethCallable');
+        require(success, '!payable');
     }
     
     /***********
     WETH HELPERS 
     ***********/
-    function depositBalanceToWETH(address to) external payable {
+    function depositBalanceToWETH() external payable {
         IWETH(wETH).deposit{value: address(this).balance}();
-        if (to != address(this)) IERC20(wETH).safeTransfer(to, IERC20(wETH).balanceOf(address(this)));
     }
     
     function withdrawBalanceFromWETH(address to) external {
         IWETH(wETH).withdraw(IERC20(wETH).balanceOf(address(this)));
         (bool success, ) = to.call{value: address(this).balance}("");
-        require(success, '!ethCallable');
+        require(success, '!payable');
     }
     
     /**********
@@ -994,8 +993,8 @@ contract InariV1 is BoringBatchableWithDai, Sushiswap_ZapIn_General_V3 {
            █ █ █     █  █        
             ▀ ▀     █    ▀       
                    ▀     */
-    /// @notice SushiSwap ETH to stake SUSHI into xSUSHI for benefit of `to`. 
-    function ethStakeSushi(address to) external payable { // SWAP `N STAKE
+    /// @notice SushiSwap ETH to stake SUSHI into xSUSHI and BENTO for benefit of `to`. 
+    function inarizushi(address to) external payable { // INARIZUSHI
         (uint256 reserve0, uint256 reserve1, ) = sushiSwapSushiETHPair.getReserves();
         uint256 amountInWithFee = msg.value.mul(997);
         uint256 amountOut =
@@ -1005,7 +1004,7 @@ contract InariV1 is BoringBatchableWithDai, Sushiswap_ZapIn_General_V3 {
         IERC20(wETH).safeTransfer(address(sushiSwapSushiETHPair), msg.value);
         sushiSwapSushiETHPair.swap(amountOut, 0, address(this), "");
         ISushiBarBridge(sushiBar).enter(sushiToken.balanceOf(address(this))); // stake resulting SUSHI into `sushiBar` xSUSHI
-        IERC20(sushiBar).safeTransfer(to, IERC20(sushiBar).balanceOf(address(this))); // transfer resulting xSUSHI to `to`
+        bento.deposit(IERC20(sushiBar), address(this), to, IERC20(sushiBar).balanceOf(address(this)), 0); // stake resulting xSUSHI into BENTO for `to`
     }
     
     /// @notice SushiSwap `fromToken` `amountIn` to `toToken` for benefit of `to`.
