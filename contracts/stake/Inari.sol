@@ -995,17 +995,17 @@ contract InariV1 is BoringBatchableWithDai, Sushiswap_ZapIn_General_V3 {
             ▀ ▀     █    ▀       
                    ▀     */
     /// @notice SushiSwap ETH to stake SUSHI into xSUSHI and BENTO for benefit of `to`. 
-    function inariZushi(address to) external payable { // INARIZUSHI
+    function inariZushi(address to) external payable returns (uint256 amountOut, uint256 shareOut) { // INARIZUSHI
         (uint256 reserve0, uint256 reserve1, ) = sushiSwapSushiETHPair.getReserves();
         uint256 amountInWithFee = msg.value.mul(997);
-        uint256 amountOut =
+        uint256 out =
             amountInWithFee.mul(reserve0) /
             reserve1.mul(1000).add(amountInWithFee);
         IWETH(wETH).deposit{value: msg.value}();
         IERC20(wETH).safeTransfer(address(sushiSwapSushiETHPair), msg.value);
-        sushiSwapSushiETHPair.swap(amountOut, 0, address(this), "");
+        sushiSwapSushiETHPair.swap(out, 0, address(this), "");
         ISushiBarBridge(sushiBar).enter(sushiToken.balanceOf(address(this))); // stake resulting SUSHI into `sushiBar` xSUSHI
-        bento.deposit(IERC20(sushiBar), address(this), to, IERC20(sushiBar).balanceOf(address(this)), 0); // stake resulting xSUSHI into BENTO for `to`
+        (amountOut, shareOut) = bento.deposit(IERC20(sushiBar), address(this), to, IERC20(sushiBar).balanceOf(address(this)), 0); // stake resulting xSUSHI into BENTO for `to`
     }
     
     /// @notice SushiSwap `fromToken` `amountIn` to `toToken` for benefit of `to`.
