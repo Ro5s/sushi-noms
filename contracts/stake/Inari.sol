@@ -312,7 +312,6 @@ contract Sushiswap_ZapIn_General_V3 {
     
     address constant sushiSwapFactory = 0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac; // SushiSwap factory contract
     ISushiLiquidityZap constant sushiSwapRouter = ISushiLiquidityZap(0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F); // SushiSwap router contract
-    address constant ETHAddress = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
     uint256 constant deadline = 0xf000000000000000000000000000000000000000000000000000000000000000;
     bytes32 constant pairCodeHash = 0xe18a34eb0e04b04f7a0ac29a6e80748dca96319b42c54d679cb821dca90c6303; // SushiSwap pair code hash
 
@@ -850,12 +849,8 @@ contract InariV1 is BoringBatchableWithDai, Sushiswap_ZapIn_General_V3 {
     /************
     BENTO HELPERS 
     ************/
-    function balanceToBento(IERC20 token, address to) external payable returns (uint256 amountOut, uint256 shareOut) {
-        if (address(token) == address(0)) {
-            (amountOut, shareOut) = bento.deposit{value: address(this).balance}(IERC20(wETH), address(this), to, address(this).balance, 0); 
-        } else {
-            (amountOut, shareOut) = bento.deposit(token, address(this), to, token.balanceOf(address(this)), 0); 
-        }
+    function balanceToBento(IERC20 token, address to) external returns (uint256 amountOut, uint256 shareOut) {
+        (amountOut, shareOut) = bento.deposit(token, address(this), to, token.balanceOf(address(this)), 0); 
     }
     
     function fromBento(IERC20 token, uint256 amount) external returns (uint256 amountOut, uint256 shareOut) {
