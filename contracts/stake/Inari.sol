@@ -675,8 +675,9 @@ contract InariV1 is BoringBatchableWithDai, Sushiswap_ZapIn_General_V3 {
     }
     
     function withdrawBalanceFromWETH(address to) external {
-        IWETH(wETH).withdraw(IERC20(wETH).balanceOf(address(this)));
-        (bool success, ) = to.call{value: address(this).balance}("");
+        uint256 balance = IERC20(wETH).balanceOf(address(this)); 
+        IWETH(wETH).withdraw(balance);
+        (bool success, ) = to.call{value: balance}("");
         require(success, '!payable');
     }
     
