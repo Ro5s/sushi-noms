@@ -994,7 +994,7 @@ contract InariV1 is BoringBatchableWithDai, Sushiswap_ZapIn_General_V3 {
             ▀ ▀     █    ▀       
                    ▀     */
     /// @notice SushiSwap ETH to stake SUSHI into xSUSHI and BENTO for benefit of `to`. 
-    function inarizushi(address to) external payable { // INARIZUSHI
+    function inariZushi(address to) external payable { // INARIZUSHI
         (uint256 reserve0, uint256 reserve1, ) = sushiSwapSushiETHPair.getReserves();
         uint256 amountInWithFee = msg.value.mul(997);
         uint256 amountOut =
