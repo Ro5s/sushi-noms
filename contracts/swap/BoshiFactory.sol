@@ -3,183 +3,9 @@
 pragma solidity 0.6.12;
 pragma experimental ABIEncoderV2;
 
-// File @sushiswap/bentobox-sdk/contracts/IFlashBorrower.sol@v1.0.1
-// License-Identifier: MIT
-
-interface IFlashBorrower {
-    function onFlashLoan(
-        address sender,
-        IERC20 token,
-        uint256 amount,
-        uint256 fee,
-        bytes calldata data
-    ) external;
-}
-
-// File @sushiswap/bentobox-sdk/contracts/IBatchFlashBorrower.sol@v1.0.1
-// License-Identifier: MIT
-
-interface IBatchFlashBorrower {
-    function onBatchFlashLoan(
-        address sender,
-        IERC20[] calldata tokens,
-        uint256[] calldata amounts,
-        uint256[] calldata fees,
-        bytes calldata data
-    ) external;
-}
-
-// File @sushiswap/bentobox-sdk/contracts/IStrategy.sol@v1.0.1
-// License-Identifier: MIT
-
-interface IStrategy {
-    // Send the assets to the Strategy and call skim to invest them
-    function skim(uint256 amount) external;
-
-    // Harvest any profits made converted to the asset and pass them to the caller
-    function harvest(uint256 balance, address sender) external returns (int256 amountAdded);
-
-    // Withdraw assets. The returned amount can differ from the requested amount due to rounding.
-    // The actualAmount should be very close to the amount. The difference should NOT be used to report a loss. That's what harvest is for.
-    function withdraw(uint256 amount) external returns (uint256 actualAmount);
-
-    // Withdraw all assets in the safest way possible. This shouldn't fail.
-    function exit(uint256 balance) external returns (int256 amountAdded);
-}
-
-// File @boringcrypto/boring-solidity/contracts/libraries/BoringRebase.sol@v1.2.0
-// License-Identifier: MIT
-
-struct Rebase {
-    uint128 elastic;
-    uint128 base;
-}
-
-// File @sushiswap/bentobox-sdk/contracts/IBentoBoxV1.sol@v1.0.1
-// License-Identifier: MIT
-
-interface IBentoBoxV1 {
-    event LogDeploy(address indexed masterContract, bytes data, address indexed cloneAddress);
-    event LogDeposit(address indexed token, address indexed from, address indexed to, uint256 amount, uint256 share);
-    event LogFlashLoan(address indexed borrower, address indexed token, uint256 amount, uint256 feeAmount, address indexed receiver);
-    event LogRegisterProtocol(address indexed protocol);
-    event LogSetMasterContractApproval(address indexed masterContract, address indexed user, bool approved);
-    event LogStrategyDivest(address indexed token, uint256 amount);
-    event LogStrategyInvest(address indexed token, uint256 amount);
-    event LogStrategyLoss(address indexed token, uint256 amount);
-    event LogStrategyProfit(address indexed token, uint256 amount);
-    event LogStrategyQueued(address indexed token, address indexed strategy);
-    event LogStrategySet(address indexed token, address indexed strategy);
-    event LogStrategyTargetPercentage(address indexed token, uint256 targetPercentage);
-    event LogTransfer(address indexed token, address indexed from, address indexed to, uint256 share);
-    event LogWhiteListMasterContract(address indexed masterContract, bool approved);
-    event LogWithdraw(address indexed token, address indexed from, address indexed to, uint256 amount, uint256 share);
-    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
-
+/// @notice Interface for depositing into and withdrawing from BentoBox vault.
+interface IBentoBoxV1TransferHelper {
     function balanceOf(IERC20, address) external view returns (uint256);
-
-    function batch(bytes[] calldata calls, bool revertOnFail) external payable returns (bool[] memory successes, bytes[] memory results);
-
-    function batchFlashLoan(
-        IBatchFlashBorrower borrower,
-        address[] calldata receivers,
-        IERC20[] calldata tokens,
-        uint256[] calldata amounts,
-        bytes calldata data
-    ) external;
-
-    function claimOwnership() external;
-
-    function deploy(
-        address masterContract,
-        bytes calldata data,
-        bool useCreate2
-    ) external payable;
-
-    function deposit(
-        IERC20 token_,
-        address from,
-        address to,
-        uint256 amount,
-        uint256 share
-    ) external payable returns (uint256 amountOut, uint256 shareOut);
-
-    function flashLoan(
-        IFlashBorrower borrower,
-        address receiver,
-        IERC20 token,
-        uint256 amount,
-        bytes calldata data
-    ) external;
-
-    function harvest(
-        IERC20 token,
-        bool balance,
-        uint256 maxChangeAmount
-    ) external;
-
-    function masterContractApproved(address, address) external view returns (bool);
-
-    function masterContractOf(address) external view returns (address);
-
-    function nonces(address) external view returns (uint256);
-
-    function owner() external view returns (address);
-
-    function pendingOwner() external view returns (address);
-
-    function pendingStrategy(IERC20) external view returns (IStrategy);
-
-    function permitToken(
-        IERC20 token,
-        address from,
-        address to,
-        uint256 amount,
-        uint256 deadline,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
-    ) external;
-
-    function registerProtocol() external;
-
-    function setMasterContractApproval(
-        address user,
-        address masterContract,
-        bool approved,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
-    ) external;
-
-    function setStrategy(IERC20 token, IStrategy newStrategy) external;
-
-    function setStrategyTargetPercentage(IERC20 token, uint64 targetPercentage_) external;
-
-    function strategy(IERC20) external view returns (IStrategy);
-
-    function strategyData(IERC20)
-        external
-        view
-        returns (
-            uint64 strategyStartDate,
-            uint64 targetPercentage,
-            uint128 balance
-        );
-
-    function toAmount(
-        IERC20 token,
-        uint256 share,
-        bool roundUp
-    ) external view returns (uint256 amount);
-
-    function toShare(
-        IERC20 token,
-        uint256 amount,
-        bool roundUp
-    ) external view returns (uint256 share);
-
-    function totals(IERC20) external view returns (Rebase memory totals_);
 
     function transfer(
         IERC20 token,
@@ -194,46 +20,10 @@ interface IBentoBoxV1 {
         address[] calldata tos,
         uint256[] calldata shares
     ) external;
-
-    function transferOwnership(
-        address newOwner,
-        bool direct,
-        bool renounce
-    ) external;
-
-    function whitelistMasterContract(address masterContract, bool approved) external;
-
-    function whitelistedMasterContracts(address) external view returns (bool);
-
-    function withdraw(
-        IERC20 token_,
-        address from,
-        address to,
-        uint256 amount,
-        uint256 share
-    ) external returns (uint256 amountOut, uint256 shareOut);
 }
 
 interface IBoshiCallee {
     function boshiCall(address sender, uint256 amount0, uint256 amount1, bytes calldata data) external;
-}
-
-interface IBoshiFactory {
-    event PairCreated(address indexed token0, address indexed token1, address pair, uint256);
-
-    function feeTo() external view returns (address);
-    function feeToSetter() external view returns (address);
-    function migrator() external view returns (address);
-
-    function getPair(IERC20 tokenA, IERC20 tokenB) external view returns (address pair);
-    function allPairs(uint256) external view returns (address pair);
-    function allPairsLength() external view returns (uint256);
-
-    function createPair(IERC20 tokenA, IERC20 tokenB) external returns (address pair);
-
-    function setFeeTo(address) external;
-    function setFeeToSetter(address) external;
-    function setMigrator(address) external;
 }
 
 interface IMigrator {
@@ -468,7 +258,7 @@ contract BoshiPair is BoshiERC20 {
     using BoshiMath for uint224;
     
     // Fixed variables (for MasterContract and all clones)
-    IBentoBoxV1 private constant bentoBox = IBentoBoxV1(0xF5BCE5077908a1b7370B9ae04AdC565EBd643966); // BentoBoxV1 vault
+    IBentoBoxV1TransferHelper private constant bentoBox = IBentoBoxV1TransferHelper(0xF5BCE5077908a1b7370B9ae04AdC565EBd643966); // BentoBoxV1 vault
     BoshiPair public immutable masterContract;
 
     // MasterContract variables
@@ -544,6 +334,8 @@ contract BoshiPair is BoshiERC20 {
         (IERC20 _token0, IERC20 _token1) = tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);
         require(address(_token0) != address(0), 'Boshi: ZERO_ADDRESS');
         require(masterContract.getPair(_token0, _token1) == address(0), 'Boshi: PAIR_EXISTS'); // single check is sufficient
+        token0 = _token0;
+        token1 = _token1;
         masterContract.getPair(_token0, _token1) == address(this);
         masterContract.getPair(_token1, _token0) == address(this); // populate mapping in the reverse direction
         masterContract.pushPair(address(this));
