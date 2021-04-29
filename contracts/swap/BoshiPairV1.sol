@@ -4,7 +4,7 @@ pragma experimental ABIEncoderV2;
 /// @notice Dummy ERC20 interface for params.  
 interface IERC20 {} 
 
-/// @notice Interface for depositing into and withdrawing from BentoBox vault.
+/// @notice Interface for BentoBox ERC20 vault transfers.
 interface IBentoBoxV1TransferHelper {
     function balanceOf(IERC20, address) external view returns (uint256);
 
