@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
-// Boshi - Uniswap V2(x) on BentoBox
 pragma solidity 0.6.12;
 pragma experimental ABIEncoderV2;
+/// @notice Dummy ERC20 interface for params.  
+interface IERC20 {} 
 
 /// @notice Interface for depositing into and withdrawing from BentoBox vault.
 interface IBentoBoxV1TransferHelper {
@@ -32,7 +33,7 @@ interface IMigrator {
 }
 
 // @notice A library for performing various math operations, including overflow/underflow checks and handling binary fixed point numbers,
-// based on awesomeness from DappHub, @boring_crypto and Uniswap V2.
+// based on awesomeness from DappHub, @boringcrypto and Uniswap V2.
 library BoshiMath {
     uint224 constant Q112 = 2**112;
     
@@ -75,6 +76,71 @@ library BoshiMath {
 
     function mul(uint256 a, uint256 b) internal pure returns (uint256 c) {
         require(b == 0 || (c = a * b) / b == a, "BoshiMath: Mul Overflow");
+    }
+}
+
+// File @boringcrypto/boring-solidity/contracts/BoringOwnable.sol@v1.2.0
+// License-Identifier: MIT
+
+// Audit on 5-Jan-2021 by Keno and BoringCrypto
+// Source: https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/access/Ownable.sol + Claimable.sol
+// Edited by BoringCrypto
+
+contract BoringOwnableData {
+    address public owner;
+    address public pendingOwner;
+}
+
+contract BoringOwnable is BoringOwnableData {
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+
+    /// @notice `owner` defaults to msg.sender on construction.
+    constructor() public {
+        owner = msg.sender;
+        emit OwnershipTransferred(address(0), msg.sender);
+    }
+
+    /// @notice Transfers ownership to `newOwner`. Either directly or claimable by the new pending owner.
+    /// Can only be invoked by the current `owner`.
+    /// @param newOwner Address of the new owner.
+    /// @param direct True if `newOwner` should be set immediately. False if `newOwner` needs to use `claimOwnership`.
+    /// @param renounce Allows the `newOwner` to be `address(0)` if `direct` and `renounce` is True. Has no effect otherwise.
+    function transferOwnership(
+        address newOwner,
+        bool direct,
+        bool renounce
+    ) public onlyOwner {
+        if (direct) {
+            // Checks
+            require(newOwner != address(0) || renounce, "Ownable: zero address");
+
+            // Effects
+            emit OwnershipTransferred(owner, newOwner);
+            owner = newOwner;
+            pendingOwner = address(0);
+        } else {
+            // Effects
+            pendingOwner = newOwner;
+        }
+    }
+
+    /// @notice Needs to be called by `pendingOwner` to claim ownership.
+    function claimOwnership() public {
+        address _pendingOwner = pendingOwner;
+
+        // Checks
+        require(msg.sender == _pendingOwner, "Ownable: caller != pending owner");
+
+        // Effects
+        emit OwnershipTransferred(owner, _pendingOwner);
+        owner = _pendingOwner;
+        pendingOwner = address(0);
+    }
+
+    /// @notice Only allows the `owner` to execute the function.
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Ownable: caller is not the owner");
+        _;
     }
 }
 
@@ -138,8 +204,8 @@ contract ERC20Data {
     /// @notice owner > nonce mapping. Used in `permit`.
     mapping(address => uint256) public nonces;
 }
-
-interface IERC20 {} contract BoshiERC20 is Domain, ERC20Data {
+/// @dev Adapted BoringERC20
+contract BoshiERC20 is Domain, ERC20Data {
     using BoshiMath for uint256;
     
     string public constant name = 'Boshi LP Token';
@@ -253,13 +319,15 @@ interface IERC20 {} contract BoshiERC20 is Domain, ERC20Data {
     }
 }
 
-contract BoshiPairV1 is BoshiERC20 {
+/// @title BoshiPairV1
+/// @notice SushiSwap on BentoBox.
+contract BoshiPairV1 is BoringOwnable, BoshiERC20 {
     using BoshiMath for uint256;
     using BoshiMath for uint224;
     
     // Fixed variables (for MasterContract and all clones)
     IBentoBoxV1TransferHelper private constant bentoBox = IBentoBoxV1TransferHelper(0xF5BCE5077908a1b7370B9ae04AdC565EBd643966); // BentoBoxV1 vault
-    BoshiPair public immutable masterContract;
+    BoshiPairV1 public immutable masterContract;
 
     // MasterContract variables
     address public feeTo;
@@ -469,20 +537,11 @@ contract BoshiPairV1 is BoshiERC20 {
     }
     
     // **** GOVERNANCE **** 
-    modifier onlyFeeToSetter {
-        require(msg.sender == masterContract.feeToSetter(), 'Boshi: FORBIDDEN');
-        _;
-    }
-
-    function setFeeTo(address _feeTo) external onlyFeeToSetter {
+    function setFeeTo(address _feeTo) external onlyOwner {
         feeTo = _feeTo;
     }
 
-    function setMigrator(address _migrator) external onlyFeeToSetter {
+    function setMigrator(address _migrator) external onlyOwner {
         migrator = _migrator;
-    }
-
-    function setFeeToSetter(address _feeToSetter) external onlyFeeToSetter {
-        feeToSetter = _feeToSetter;
     }
 }
