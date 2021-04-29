@@ -467,13 +467,24 @@ contract BoshiPair is BoshiERC20 {
     using BoshiMath for uint256;
     using BoshiMath for uint224;
     
-    IBentoBoxV1 private constant bento = IBentoBoxV1(0xF5BCE5077908a1b7370B9ae04AdC565EBd643966); // BentoBoxV1 vault
-    uint256 public constant MINIMUM_LIQUIDITY = 10**3;
+    // Fixed variables (for MasterContract and all clones)
+    IBentoBoxV1 private constant bentoBox = IBentoBoxV1(0xF5BCE5077908a1b7370B9ae04AdC565EBd643966); // BentoBoxV1 vault
+    BoshiPair public immutable masterContract;
 
-    address public factory;
+    // MasterContract variables
+    address public feeTo;
+    address public feeToSetter;
+    address public migrator;
+    
+    mapping(IERC20 => mapping(IERC20 => address)) public getPair;
+    address[] public allPairs;
+    
+    // Per clone variables
+    // Clone init settings
+    uint256 public constant MINIMUM_LIQUIDITY = 10**3;
     IERC20 public token0;
     IERC20 public token1;
-
+    
     uint112 private reserve0;           // uses single storage slot, accessible via getReserves
     uint112 private reserve1;           // uses single storage slot, accessible via getReserves
     uint32  private blockTimestampLast; // uses single storage slot, accessible via getReserves
@@ -489,13 +500,23 @@ contract BoshiPair is BoshiERC20 {
         _;
         unlocked = 1;
     }
+    
+    function pushPair(address pair) external {
+        require(msg.sender == address(this));
+        allPairs.push(pair);
+    }  
+    
+    function allPairsLength() external view returns (uint256) {
+        return allPairs.length;
+    }
 
     function getReserves() public view returns (uint112 _reserve0, uint112 _reserve1, uint32 _blockTimestampLast) {
         _reserve0 = reserve0;
         _reserve1 = reserve1;
         _blockTimestampLast = blockTimestampLast;
     }
-
+    
+    event PairCreated(IERC20 indexed token0, IERC20 indexed token1, address pair, uint256); // master contract event
     event Mint(address indexed sender, uint256 amount0, uint256 amount1);
     event Burn(address indexed sender, uint256 amount0, uint256 amount1, address indexed to);
     event Swap(
@@ -508,15 +529,29 @@ contract BoshiPair is BoshiERC20 {
     );
     event Sync(uint112 reserve0, uint112 reserve1);
 
+    /// @notice The constructor is only used for the initial master contract. Subsequent clones are initialised via `init`.
     constructor() public {
-        factory = msg.sender;
+        masterContract = this;
+        feeTo = msg.sender;
     }
-
-    // called once by the factory at time of deployment
-    function initialize(IERC20 _token0, IERC20 _token1) external {
-        require(msg.sender == factory, 'Boshi: FORBIDDEN'); // sufficient check
+    
+    /// @notice Serves as the constructor for clones, as clones can't have a regular constructor.
+    /// @dev `data` is abi encoded in the format: (IERC20 tokenA, IERC20 tokenB)
+    function init(bytes calldata data) external {
+        require(address(token0) == address(0), 'BoshiPair: ALREADY_INITIALIZED');
+        (IERC20 tokenA, IERC20 tokenB) = abi.decode(data, (IERC20, IERC20));
+        require(tokenA != tokenB, 'Boshi: IDENTICAL_ADDRESSES');
+        (IERC20 _token0, IERC20 _token1) = tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);
+        require(address(_token0) != address(0), 'Boshi: ZERO_ADDRESS');
+        require(masterContract.getPair(_token0, _token1) == address(0), 'Boshi: PAIR_EXISTS'); // single check is sufficient
         token0 = _token0;
         token1 = _token1;
+        masterContract.getPair(_token0, _token1) == address(this);
+        masterContract.getPair(_token1, _token0) == address(this); // populate mapping in the reverse direction
+        masterContract.pushPair(address(this));
+        token0 = _token0;
+        token1 = _token1;
+        emit PairCreated(token0, token1, address(this), masterContract.allPairsLength());
     }
 
     // update reserves and, on the first call per block, price accumulators
@@ -537,8 +572,8 @@ contract BoshiPair is BoshiERC20 {
 
     // if fee is on, mint liquidity equivalent to 1/6th of the growth in sqrt(k)
     function _mintFee(uint112 _reserve0, uint112 _reserve1) private returns (bool feeOn) {
-        address feeTo = IBoshiFactory(factory).feeTo();
-        feeOn = feeTo != address(0);
+        address _feeTo = masterContract.feeTo();
+        feeOn = _feeTo != address(0);
         uint256 _kLast = kLast; // gas savings
         if (feeOn) {
             if (_kLast != 0) {
@@ -559,20 +594,20 @@ contract BoshiPair is BoshiERC20 {
     // this low-level function should be called from a contract which performs important safety checks
     function mint(address to) external lock returns (uint256 liquidity) {
         (uint112 _reserve0, uint112 _reserve1,) = getReserves(); // gas savings
-        uint256 balance0 = IBentoBoxV1(bento).balanceOf(token0, address(this));
-        uint256 balance1 = IBentoBoxV1(bento).balanceOf(token1, address(this));
+        uint256 balance0 = bentoBox.balanceOf(token0, address(this));
+        uint256 balance1 = bentoBox.balanceOf(token1, address(this));
         uint256 amount0 = balance0.sub(_reserve0);
         uint256 amount1 = balance1.sub(_reserve1);
 
         bool feeOn = _mintFee(_reserve0, _reserve1);
         uint256 _totalSupply = totalSupply; // gas savings, must be defined here since totalSupply can update in _mintFee
         if (_totalSupply == 0) {
-            address migrator = IBoshiFactory(factory).migrator();
-            if (msg.sender == migrator) {
-                liquidity = IMigrator(migrator).desiredLiquidity();
-                require(liquidity > 0 && liquidity != uint256(-1), "Bad desired liquidity");
+            IMigrator _migrator = IMigrator(masterContract.migrator());
+            if (msg.sender == address(_migrator)) {
+                liquidity = _migrator.desiredLiquidity();
+                require(liquidity > 0 && liquidity != type(uint256).max, "Bad desired liquidity");
             } else {
-                require(migrator == address(0), "Must not have migrator");
+                require(address(_migrator) == address(0), "Must not have migrator");
                 liquidity = BoshiMath.sqrt(amount0.mul(amount1)).sub(MINIMUM_LIQUIDITY);
                 _mint(address(0), MINIMUM_LIQUIDITY); // permanently lock the first MINIMUM_LIQUIDITY tokens
             }
@@ -592,8 +627,8 @@ contract BoshiPair is BoshiERC20 {
         (uint112 _reserve0, uint112 _reserve1,) = getReserves(); // gas savings
         IERC20 _token0 = token0;                                 // gas savings
         IERC20 _token1 = token1;                                 // gas savings
-        uint256 balance0 = IBentoBoxV1(bento).balanceOf(_token0, address(this));
-        uint256 balance1 = IBentoBoxV1(bento).balanceOf(_token1, address(this));
+        uint256 balance0 = bentoBox.balanceOf(_token0, address(this));
+        uint256 balance1 = bentoBox.balanceOf(_token1, address(this));
         uint256 liquidity = balanceOf[address(this)];
 
         bool feeOn = _mintFee(_reserve0, _reserve1);
@@ -602,10 +637,10 @@ contract BoshiPair is BoshiERC20 {
         amount1 = liquidity.mul(balance1) / _totalSupply; // using balances ensures pro-rata distribution
         require(amount0 > 0 && amount1 > 0, 'Boshi: INSUFFICIENT_LIQUIDITY_BURNED');
         _burn(address(this), liquidity);
-        bento.transfer(_token0, address(this), to, amount0);
-        bento.transfer(_token1, address(this), to, amount1);
-        balance0 = IBentoBoxV1(bento).balanceOf(_token0, address(this));
-        balance1 = IBentoBoxV1(bento).balanceOf(_token1, address(this));
+        bentoBox.transfer(_token0, address(this), to, amount0);
+        bentoBox.transfer(_token1, address(this), to, amount1);
+        balance0 = bentoBox.balanceOf(_token0, address(this));
+        balance1 = bentoBox.balanceOf(_token1, address(this));
 
         _update(balance0, balance1, _reserve0, _reserve1);
         if (feeOn) kLast = uint256(reserve0).mul(reserve1); // reserve0 and reserve1 are up-to-date
@@ -624,11 +659,11 @@ contract BoshiPair is BoshiERC20 {
         IERC20 _token0 = token0;
         IERC20 _token1 = token1;
         require(to != address(_token0) && to != address(_token1), 'Boshi: INVALID_TO');
-        if (amount0Out > 0) bento.transfer(_token0, address(this), to, amount0Out); // optimistically transfer tokens
-        if (amount1Out > 0) bento.transfer(_token1, address(this), to, amount1Out); // optimistically transfer tokens
+        if (amount0Out > 0) bentoBox.transfer(_token0, address(this), to, amount0Out); // optimistically transfer tokens
+        if (amount1Out > 0) bentoBox.transfer(_token1, address(this), to, amount1Out); // optimistically transfer tokens
         if (data.length > 0) IBoshiCallee(to).boshiCall(msg.sender, amount0Out, amount1Out, data);
-        balance0 = IBentoBoxV1(bento).balanceOf(_token0, address(this));
-        balance1 = IBentoBoxV1(bento).balanceOf(_token1, address(this));
+        balance0 = bentoBox.balanceOf(_token0, address(this));
+        balance1 = bentoBox.balanceOf(_token1, address(this));
         }
         uint256 amount0In = balance0 > _reserve0 - amount0Out ? balance0 - (_reserve0 - amount0Out) : 0;
         uint256 amount1In = balance1 > _reserve1 - amount1Out ? balance1 - (_reserve1 - amount1Out) : 0;
@@ -642,62 +677,22 @@ contract BoshiPair is BoshiERC20 {
         _update(balance0, balance1, _reserve0, _reserve1);
         emit Swap(msg.sender, amount0In, amount1In, amount0Out, amount1Out, to);
     }
-}
-
-contract BoshiFactory is IBoshiFactory {
-    address public override feeTo;
-    address public override feeToSetter;
-    address public override migrator;
-
-    mapping(IERC20 => mapping(IERC20 => address)) public override getPair;
-    address[] public override allPairs;
-
-    event PairCreated(IERC20 indexed token0, IERC20 indexed token1, address pair, uint256);
-
-    constructor(address _feeToSetter) public {
-        feeToSetter = _feeToSetter;
-    }
-
-    function allPairsLength() external override view returns (uint256) {
-        return allPairs.length;
-    }
-
-    function pairCodeHash() external pure returns (bytes32) {
-        return keccak256(type(BoshiPair).creationCode);
-    }
-
-    function createPair(IERC20 tokenA, IERC20 tokenB) external override returns (address pair) {
-        require(tokenA != tokenB, 'Boshi: IDENTICAL_ADDRESSES');
-        (IERC20 token0, IERC20 token1) = tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);
-        require(address(token0) != address(0), 'Boshi: ZERO_ADDRESS');
-        require(getPair[token0][token1] == address(0), 'Boshi: PAIR_EXISTS'); // single check is sufficient
-        bytes memory bytecode = type(BoshiPair).creationCode;
-        bytes32 salt = keccak256(abi.encodePacked(token0, token1));
-        assembly {
-            pair := create2(0, add(bytecode, 32), mload(bytecode), salt)
-        }
-        BoshiPair(pair).initialize(token0, token1);
-        getPair[token0][token1] = pair;
-        getPair[token1][token0] = pair; // populate mapping in the reverse direction
-        allPairs.push(pair);
-        emit PairCreated(token0, token1, pair, allPairs.length);
-    }
     
     // **** GOVERNANCE **** 
     modifier onlyFeeToSetter {
-        require(msg.sender == feeToSetter, 'Boshi: FORBIDDEN');
+        require(msg.sender == masterContract.feeToSetter(), 'Boshi: FORBIDDEN');
         _;
     }
 
-    function setFeeTo(address _feeTo) external override onlyFeeToSetter {
+    function setFeeTo(address _feeTo) external onlyFeeToSetter {
         feeTo = _feeTo;
     }
 
-    function setMigrator(address _migrator) external override onlyFeeToSetter {
+    function setMigrator(address _migrator) external onlyFeeToSetter {
         migrator = _migrator;
     }
 
-    function setFeeToSetter(address _feeToSetter) external override onlyFeeToSetter {
+    function setFeeToSetter(address _feeToSetter) external onlyFeeToSetter {
         feeToSetter = _feeToSetter;
     }
 }
