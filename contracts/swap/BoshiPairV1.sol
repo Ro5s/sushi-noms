@@ -32,7 +32,7 @@ interface IMigrator {
 }
 
 // @notice A library for performing various math operations, including overflow/underflow checks and handling binary fixed point numbers,
-// based on awesomeness from DappHub, @boringcrypto and Uniswap V2.
+// based on awesomeness from DappHub, @boring_crypto and Uniswap V2.
 library BoshiMath {
     uint224 constant Q112 = 2**112;
     
@@ -253,7 +253,7 @@ interface IERC20 {} contract BoshiERC20 is Domain, ERC20Data {
     }
 }
 
-contract BoshiPair is BoshiERC20 {
+contract BoshiPairV1 is BoshiERC20 {
     using BoshiMath for uint256;
     using BoshiMath for uint224;
     
