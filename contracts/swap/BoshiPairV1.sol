@@ -402,14 +402,12 @@ contract BoshiPairV1 is BoringOwnable, BoshiERC20 {
         (IERC20 _token0, IERC20 _token1) = tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);
         require(address(_token0) != address(0), 'Boshi: ZERO_ADDRESS');
         require(masterContract.getPair(_token0, _token1) == address(0), 'Boshi: PAIR_EXISTS'); // single check is sufficient
-        token0 = _token0;
-        token1 = _token1;
         masterContract.getPair(_token0, _token1) == address(this);
         masterContract.getPair(_token1, _token0) == address(this); // populate mapping in the reverse direction
         masterContract.pushPair(address(this));
         token0 = _token0;
         token1 = _token1;
-        emit PairCreated(token0, token1, address(this), masterContract.allPairsLength());
+        emit PairCreated(_token0, _token1, address(this), masterContract.allPairsLength());
     }
 
     // update reserves and, on the first call per block, price accumulators
