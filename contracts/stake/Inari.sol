@@ -49,6 +49,15 @@ interface IBentoBridge {
     function balanceOf(IERC20, address) external view returns (uint256);
     
     function registerProtocol() external;
+    
+    function setMasterContractApproval(
+        address user,
+        address masterContract,
+        bool approved,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external;
 
     function deposit( 
         IERC20 token_,
@@ -86,19 +95,6 @@ interface IDaiPermit {
         bytes32 r,
         bytes32 s
     ) external;
-}
-
-/// @notice Interface for depositing and withdrawing assets from KASHI.
-interface IKashi {
-    function asset() external returns (IERC20);
-    
-    function addAsset(
-        address to,
-        bool skim,
-        uint256 share
-    ) external returns (uint256 fraction);
-    
-    function removeAsset(address to, uint256 fraction) external returns (uint256 share);
 }
 
 /// @notice Interface for depositing into and withdrawing from SushiBar.
@@ -615,7 +611,7 @@ interface IMasterChefV2 {
     function deposit(uint256 pid, uint256 amount, address to) external;
 }
 
-/// @notice Interface for ETH wrapper contract (v9).
+/// @notice Interface for ETH wrapper contract v9.
 interface IWETH {
     function deposit() external payable;
     function withdraw(uint wad) external;
@@ -636,7 +632,7 @@ contract InariV1 is BoringBatchableWithDai, Sushiswap_ZapIn_General_V3 {
     IBentoBridge constant bento = IBentoBridge(0xF5BCE5077908a1b7370B9ae04AdC565EBd643966); // BENTO vault contract
     address constant crSushiToken = 0x338286C0BC081891A4Bda39C7667ae150bf5D206; // crSUSHI staking contract for SUSHI
     address constant crXSushiToken = 0x228619CCa194Fbe3Ebeb2f835eC1eA5080DaFbb2; // crXSUSHI staking contract for xSUSHI
-    address constant wETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2; // ETH wrapper contract (v9)
+    address constant wETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2; // ETH wrapper contract v9
     
     /// @notice Initialize this Inari contract.
     constructor() public {
@@ -661,8 +657,8 @@ contract InariV1 is BoringBatchableWithDai, Sushiswap_ZapIn_General_V3 {
     ETH HELPERS 
     **********/
     receive() external payable {}
-    
-    function withdrawETHBalance(address to) external payable {
+
+    function withdrawETHbalance(address to) external payable {
         (bool success, ) = to.call{value: address(this).balance}("");
         require(success, '!payable');
     }
@@ -681,38 +677,31 @@ contract InariV1 is BoringBatchableWithDai, Sushiswap_ZapIn_General_V3 {
         require(success, '!payable');
     }
     
-    /*********
-    TKN HELPER 
-    *********/
+    /**********
+    TKN HELPERS 
+    **********/
+    function depositToken(IERC20 token, uint256 amount) external {
+        token.safeTransferFrom(msg.sender, address(this), amount);
+    }
+    
     function withdrawTokenBalance(IERC20 token, address to) external {
         token.safeTransfer(to, token.balanceOf(address(this))); 
     }
 
-    /************
-    SUSHI HELPERS 
-    ************/
+    /***********
+    SUSHI HELPER 
+    ***********/
     /// @notice Stake SUSHI local balance into xSushi for benefit of `to` by call to `sushiBar`.
     function stakeSushiBalance(address to) external {
         ISushiBarBridge(sushiBar).enter(sushiToken.balanceOf(address(this))); // stake local SUSHI into `sushiBar` xSUSHI
         IERC20(sushiBar).safeTransfer(to, IERC20(sushiBar).balanceOf(address(this))); // transfer resulting xSUSHI to `to`
     }
     
-    /***********
-    CHEF HELPERS 
-    ***********/
+    /**********
+    CHEF HELPER 
+    **********/
     function balanceToMasterChefv2(IERC20 lpToken, uint256 pid, address to) external {
         masterChefv2.deposit(pid, lpToken.balanceOf(address(this)), to);
-    }
-    
-    /************
-    KASHI HELPERS 
-    ************/
-    function assetBalanceToKashi(IKashi kashiPair, address to, bool skim) external returns (uint256 fraction) {
-        fraction = kashiPair.addAsset(to, skim, bento.balanceOf(kashiPair.asset(), address(this)));
-    }
-    
-    function assetBalanceFromKashi(address kashiPair, address to) external returns (uint256 share) {
-        share = IKashi(kashiPair).removeAsset(to, IERC20(kashiPair).balanceOf(address(this)));
     }
 /*
 ██   ██       ▄   ▄███▄   
@@ -854,7 +843,19 @@ contract InariV1 is BoringBatchableWithDai, Sushiswap_ZapIn_General_V3 {
     }
     
     function balanceFromBento(IERC20 token, address to) external returns (uint256 amountOut, uint256 shareOut) {
-        (amountOut, shareOut) = bento.withdraw(token, address(this), to, bento.balanceOf(token, address(this)), 0); 
+        (amountOut, shareOut) = bento.withdraw(token, address(this), to, 0, bento.balanceOf(token, address(this))); 
+    }
+    
+    /// @dev Included to be able to approve `bento` in the same transaction (using `batch()`).
+    function setBentoApproval(
+        address user,
+        address masterContract,
+        bool approved,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external {
+        bento.setMasterContractApproval(user, masterContract, approved, v, r, s);
     }
 
     /***********************
