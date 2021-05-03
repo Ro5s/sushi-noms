@@ -363,6 +363,11 @@ contract BoshiPairV1 is BoringOwnable, BoshiERC20 {
         unlocked = 1;
     }
     
+    modifier ensure(uint deadline) {
+        require(deadline >= block.timestamp, 'Boshi: EXPIRED');
+        _;
+    }
+    
     function pushPair(address pair) external {
         require(msg.sender == address(this), 'Boshi: FORBIDDEN');
         allPairs.push(pair);
@@ -452,7 +457,7 @@ contract BoshiPairV1 is BoringOwnable, BoshiERC20 {
     }
 
     /// @notice This low-level function should be called from a contract which performs important safety checks.
-    function mint(address to) external lock returns (uint256 liquidity) {
+    function mint(address to) public lock returns (uint256 liquidity) {
         (uint112 _reserve0, uint112 _reserve1, ) = getReserves(); // gas savings
         uint256 balance0 = bentoBox.balanceOf(token0, address(this));
         uint256 balance1 = bentoBox.balanceOf(token1, address(this));
@@ -538,6 +543,43 @@ contract BoshiPairV1 is BoringOwnable, BoshiERC20 {
         emit Swap(msg.sender, amount0In, amount1In, amount0Out, amount1Out, to);
     }
     
+    /// **** ADD LIQUIDITY ****
+    function addLiquidity(
+        uint amountADesired,
+        uint amountBDesired,
+        uint amountAMin,
+        uint amountBMin,
+        address to,
+        uint deadline
+    ) external ensure(deadline) returns (uint256 amountA, uint256 amountB, uint256 liquidity) {
+        (uint112 _reserve0, uint112 _reserve1, ) = getReserves();
+        if (_reserve0 == 0 && _reserve1 == 0) {
+            (amountA, amountB) = (amountADesired, amountBDesired);
+        } else {
+            uint amountBOptimal = quote(amountADesired, _reserve0, _reserve1);
+            if (amountBOptimal <= amountBDesired) {
+                require(amountBOptimal >= amountBMin, 'Boshi: INSUFFICIENT_B_AMOUNT');
+                (amountA, amountB) = (amountADesired, amountBOptimal);
+            } else {
+                uint amountAOptimal = quote(amountBDesired, _reserve1, _reserve0);
+                assert(amountAOptimal <= amountADesired);
+                require(amountAOptimal >= amountAMin, 'Boshi: INSUFFICIENT_A_AMOUNT');
+                (amountA, amountB) = (amountAOptimal, amountBDesired);
+            }
+        }
+        bentoBox.transfer(token0, msg.sender, address(this), amountA);
+        bentoBox.transfer(token1, msg.sender, address(this), amountB);
+        liquidity = mint(to);
+    }
+
+    //// **** HELPERS **** 
+    /// @notice Given some amount of an asset and pair reserves, returns an equivalent amount of the other asset.
+    function quote(uint amountA, uint reserveA, uint reserveB) internal pure returns (uint amountB) {
+        require(amountA > 0, 'UniswapV2Library: INSUFFICIENT_AMOUNT');
+        require(reserveA > 0 && reserveB > 0, 'UniswapV2Library: INSUFFICIENT_LIQUIDITY');
+        amountB = amountA.mul(reserveB) / reserveA;
+    }
+
     /// **** GOVERNANCE **** 
     function setFeeTo(address _feeTo) external onlyOwner {
         feeTo = _feeTo;
