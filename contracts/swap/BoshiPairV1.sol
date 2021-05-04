@@ -488,7 +488,7 @@ contract BoshiPairV1 is BoringOwnable, BoshiERC20 {
     }
 
     /// @notice This low-level function should be called from a contract which performs important safety checks.
-    function burn(address to) external lock returns (uint256 amount0, uint256 amount1) {
+    function burn(address to) public lock returns (uint256 amount0, uint256 amount1) {
         (uint112 _reserve0, uint112 _reserve1, ) = getReserves(); // gas savings
         IERC20 _token0 = token0;                                 // gas savings
         IERC20 _token1 = token1;                                 // gas savings
@@ -545,39 +545,45 @@ contract BoshiPairV1 is BoringOwnable, BoshiERC20 {
     
     /// **** ADD LIQUIDITY ****
     function addLiquidity(
-        uint amountADesired,
-        uint amountBDesired,
-        uint amountAMin,
-        uint amountBMin,
+        uint amount0Desired,
+        uint amount1Desired,
+        uint amount0Min,
+        uint amount1Min,
         address to,
         uint deadline
-    ) external ensure(deadline) returns (uint256 amountA, uint256 amountB, uint256 liquidity) {
+    ) external ensure(deadline) returns (uint256 amount0, uint256 amount1, uint256 liquidity) {
         (uint112 _reserve0, uint112 _reserve1, ) = getReserves();
         if (_reserve0 == 0 && _reserve1 == 0) {
-            (amountA, amountB) = (amountADesired, amountBDesired);
+            (amount0, amount1) = (amount0Desired, amount1Desired);
         } else {
-            uint amountBOptimal = quote(amountADesired, _reserve0, _reserve1);
-            if (amountBOptimal <= amountBDesired) {
-                require(amountBOptimal >= amountBMin, 'Boshi: INSUFFICIENT_B_AMOUNT');
-                (amountA, amountB) = (amountADesired, amountBOptimal);
+            uint amount1Optimal = amount0Desired.mul(_reserve1) / _reserve0;
+            if (amount1Optimal <= amount1Desired) {
+                require(amount1Optimal >= amount1Min, 'Boshi: INSUFFICIENT_1_AMOUNT');
+                (amount0, amount1) = (amount0Desired, amount1Optimal);
             } else {
-                uint amountAOptimal = quote(amountBDesired, _reserve1, _reserve0);
-                assert(amountAOptimal <= amountADesired);
-                require(amountAOptimal >= amountAMin, 'Boshi: INSUFFICIENT_A_AMOUNT');
-                (amountA, amountB) = (amountAOptimal, amountBDesired);
+                uint amount0Optimal = amount1Desired.mul(_reserve1) / _reserve0;
+                assert(amount0Optimal <= amount0Desired);
+                require(amount0Optimal >= amount0Min, 'Boshi: INSUFFICIENT_0_AMOUNT');
+                (amount0, amount1) = (amount0Optimal, amount1Desired);
             }
         }
-        bentoBox.transfer(token0, msg.sender, address(this), amountA);
-        bentoBox.transfer(token1, msg.sender, address(this), amountB);
+        bentoBox.transfer(token0, msg.sender, address(this), amount0);
+        bentoBox.transfer(token1, msg.sender, address(this), amount1);
         liquidity = mint(to);
     }
-
-    //// **** HELPERS **** 
-    /// @notice Given some amount of an asset and pair reserves, returns an equivalent amount of the other asset.
-    function quote(uint amountA, uint reserveA, uint reserveB) internal pure returns (uint amountB) {
-        require(amountA > 0, 'UniswapV2Library: INSUFFICIENT_AMOUNT');
-        require(reserveA > 0 && reserveB > 0, 'UniswapV2Library: INSUFFICIENT_LIQUIDITY');
-        amountB = amountA.mul(reserveB) / reserveA;
+    
+    /// **** REMOVE LIQUIDITY ****
+    function removeLiquidity(
+        uint liquidity,
+        uint amount0Min,
+        uint amount1Min,
+        address to,
+        uint deadline
+    ) external ensure(deadline) returns (uint amount0, uint amount1) {
+        this.transferFrom(msg.sender, address(this), liquidity); // send liquidity to this pair
+        (amount0, amount1) = burn(to);
+        require(amount0 >= amount0Min, 'Boshi: INSUFFICIENT_0_AMOUNT');
+        require(amount1 >= amount1Min, 'Boshi: INSUFFICIENT_1_AMOUNT');
     }
 
     /// **** GOVERNANCE **** 
