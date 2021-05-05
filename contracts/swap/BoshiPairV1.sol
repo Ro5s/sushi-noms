@@ -245,7 +245,7 @@ contract ERC20Data {
     mapping(address => uint256) public nonces;
 }
 
-///// - TO-DO ADD GOV BRAVO INTEGRATION
+///// - TO-DO: ADD VOTING
 /// @notice ERC20 extended for Boshi 'pair'.
 contract BoshiERC20 is Domain, ERC20Data {
     using BoshiMath for uint256;
@@ -363,10 +363,6 @@ contract BoshiERC20 is Domain, ERC20Data {
     }
 }
 
-interface IUchi {
-    function uchi(uint256 list, address account) external view returns (bool);
-}
-
 /// @title BoshiPairV1
 /// @notice SushiSwap on BentoBoxV1.
 contract BoshiPairV1 is BaseBoringBatchable, BoringOwnable, BoshiERC20 {
@@ -398,9 +394,6 @@ contract BoshiPairV1 is BaseBoringBatchable, BoringOwnable, BoshiERC20 {
     uint256 public price1CumulativeLast;
     uint256 public kLast; // reserve0 * reserve1, as of immediately after the most recent liquidity event
     
-    IUchi public uchi;
-    uint256 public uchiList; 
-
     uint256 private unlocked = 1;
     modifier lock() {
         require(unlocked == 1, 'Boshi: LOCKED');
@@ -412,11 +405,9 @@ contract BoshiPairV1 is BaseBoringBatchable, BoringOwnable, BoshiERC20 {
     /// TO-DO can we generalize more?
     modifier ensure(uint deadline) {
         require(deadline >= block.timestamp, 'Boshi: EXPIRED');
-        //require(uchi(uchiList, msg.sender) && uchi(uchiList, to));
         _;
     }
     
-    /// TO-DO ADD BRAVO GOVERNANCE TO LP TOKENS (but, make bravo into master general;)
     function pushPair(address pair) external {
         require(msg.sender == address(this), 'Boshi: FORBIDDEN');
         allPairs.push(pair);
@@ -449,7 +440,6 @@ contract BoshiPairV1 is BaseBoringBatchable, BoringOwnable, BoshiERC20 {
     constructor() {
         masterContract = this;
         feeTo = msg.sender;
-        uchi = IUchi(address(0)); // placeholder - TO-DO
     }
     
     /// @notice Serves as the constructor for clones, as clones can't have a regular constructor.
