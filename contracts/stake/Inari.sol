@@ -46,8 +46,6 @@ interface IAaveBridge {
 
 /// @notice Interface for depositing into and withdrawing from BentoBox vault.
 interface IBentoBridge {
-    function balanceOf(IERC20, address) external view returns (uint256);
-    
     function registerProtocol() external;
     
     function setMasterContractApproval(
@@ -838,14 +836,10 @@ contract InariV1 is BoringBatchableWithDai, Sushiswap_ZapIn_General_V3 {
         (amountOut, shareOut) = bento.deposit(token, address(this), to, token.balanceOf(address(this)), 0); 
     }
     
-    function fromBento(IERC20 token, uint256 amount) external returns (uint256 amountOut, uint256 shareOut) {
+    function depositFromBento(IERC20 token, uint256 amount) external returns (uint256 amountOut, uint256 shareOut) {
         (amountOut, shareOut) = bento.withdraw(token, msg.sender, address(this), amount, 0); 
     }
-    
-    function balanceFromBento(IERC20 token, address to) external returns (uint256 amountOut, uint256 shareOut) {
-        (amountOut, shareOut) = bento.withdraw(token, address(this), to, 0, bento.balanceOf(token, address(this))); 
-    }
-    
+
     /// @dev Included to be able to approve `bento` in the same transaction (using `batch()`).
     function setBentoApproval(
         address user,
