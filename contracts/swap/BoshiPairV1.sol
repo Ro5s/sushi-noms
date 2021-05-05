@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.6.12;
+pragma solidity 0.7.6;
 pragma experimental ABIEncoderV2;
 /// @notice Dummy ERC20 interface for params.  
 interface IERC20 {} 
 
 /// @notice Interface for BentoBox ERC20 vault transfers.
-interface IBentoBoxV1TransferHelper {
+interface IBentoBoxV1 {
     function balanceOf(IERC20, address) external view returns (uint256);
 
     function transfer(
@@ -81,6 +81,44 @@ library BoshiMath {
     }
 }
 
+// File @boringcrypto/boring-solidity/contracts/BoringBatchable.sol@v1.2.0
+// License-Identifier: MIT
+
+contract BaseBoringBatchable {
+    /// @dev Helper function to extract a useful revert message from a failed call.
+    /// If the returned data is malformed or not correctly abi encoded then this call can fail itself.
+    function _getRevertMsg(bytes memory _returnData) internal pure returns (string memory) {
+        // If the _res length is less than 68, then the transaction failed silently (without a revert message)
+        if (_returnData.length < 68) return "Transaction reverted silently";
+
+        assembly {
+            // Slice the sighash.
+            _returnData := add(_returnData, 0x04)
+        }
+        return abi.decode(_returnData, (string)); // All that remains is the revert string
+    }
+
+    /// @notice Allows batched call to self (this contract).
+    /// @param calls An array of inputs for each call.
+    /// @param revertOnFail If True then reverts after a failed call and stops doing further calls.
+    /// @return successes An array indicating the success of a call, mapped one-to-one to `calls`.
+    /// @return results An array with the returned data of each function call, mapped one-to-one to `calls`.
+    // F1: External is ok here because this is the batch function, adding it to a batch makes no sense
+    // F2: Calls in the batch may be payable, delegatecall operates in the same context, so each call in the batch has access to msg.value
+    // C3: The length of the loop is fully under user control, so can't be exploited
+    // C7: Delegatecall is only used on the same contract, so it's safe
+    function batch(bytes[] calldata calls, bool revertOnFail) external payable returns (bool[] memory successes, bytes[] memory results) {
+        successes = new bool[](calls.length);
+        results = new bytes[](calls.length);
+        for (uint256 i = 0; i < calls.length; i++) {
+            (bool success, bytes memory result) = address(this).delegatecall(calls[i]);
+            require(success || !revertOnFail, _getRevertMsg(result));
+            successes[i] = success;
+            results[i] = result;
+        }
+    }
+}
+
 // File @boringcrypto/boring-solidity/contracts/BoringOwnable.sol@v1.2.0
 // License-Identifier: MIT
 
@@ -97,7 +135,7 @@ contract BoringOwnable is BoringOwnableData {
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     /// @notice `owner` defaults to msg.sender on construction.
-    constructor() public {
+    constructor() {
         owner = msg.sender;
         emit OwnershipTransferred(address(0), msg.sender);
     }
@@ -166,7 +204,7 @@ contract Domain {
         return keccak256(abi.encode(DOMAIN_SEPARATOR_SIGNATURE_HASH, chainId, address(this)));
     }
 
-    constructor() public {
+    constructor() {
         uint256 chainId;
         assembly {
             chainId := chainid()
@@ -207,6 +245,7 @@ contract ERC20Data {
     mapping(address => uint256) public nonces;
 }
 
+///// - TO-DO ADD GOV BRAVO INTEGRATION
 /// @notice ERC20 extended for Boshi 'pair'.
 contract BoshiERC20 is Domain, ERC20Data {
     using BoshiMath for uint256;
@@ -324,14 +363,18 @@ contract BoshiERC20 is Domain, ERC20Data {
     }
 }
 
+interface IUchi {
+    function uchi(uint256 list, address account) external view returns (bool);
+}
+
 /// @title BoshiPairV1
 /// @notice SushiSwap on BentoBoxV1.
-contract BoshiPairV1 is BoringOwnable, BoshiERC20 {
+contract BoshiPairV1 is BaseBoringBatchable, BoringOwnable, BoshiERC20 {
     using BoshiMath for uint256;
     using BoshiMath for uint224;
     
     /// @dev Fixed variables (for `masterContract` and all 'pair' clones).
-    IBentoBoxV1TransferHelper private constant bentoBox = IBentoBoxV1TransferHelper(0xF5BCE5077908a1b7370B9ae04AdC565EBd643966); // BentoBoxV1 vault
+    IBentoBoxV1 private constant bentoBox = IBentoBoxV1(0xF5BCE5077908a1b7370B9ae04AdC565EBd643966); // BentoBoxV1 vault
     BoshiPairV1 public immutable masterContract; // Boshi 'master' for clones
 
     /// @notice `masterContract` variables.
@@ -354,6 +397,9 @@ contract BoshiPairV1 is BoringOwnable, BoshiERC20 {
     uint256 public price0CumulativeLast;
     uint256 public price1CumulativeLast;
     uint256 public kLast; // reserve0 * reserve1, as of immediately after the most recent liquidity event
+    
+    IUchi public uchi;
+    uint256 public uchiList; 
 
     uint256 private unlocked = 1;
     modifier lock() {
@@ -363,11 +409,14 @@ contract BoshiPairV1 is BoringOwnable, BoshiERC20 {
         unlocked = 1;
     }
     
+    /// TO-DO can we generalize more?
     modifier ensure(uint deadline) {
         require(deadline >= block.timestamp, 'Boshi: EXPIRED');
+        //require(uchi(uchiList, msg.sender) && uchi(uchiList, to));
         _;
     }
     
+    /// TO-DO ADD BRAVO GOVERNANCE TO LP TOKENS (but, make bravo into master general;)
     function pushPair(address pair) external {
         require(msg.sender == address(this), 'Boshi: FORBIDDEN');
         allPairs.push(pair);
@@ -397,9 +446,10 @@ contract BoshiPairV1 is BoringOwnable, BoshiERC20 {
     event Sync(uint112 reserve0, uint112 reserve1);
 
     /// @notice The constructor is only used for the initial `masterContract`. Subsequent clones are initialized via `init()`.
-    constructor() public {
+    constructor() {
         masterContract = this;
         feeTo = msg.sender;
+        uchi = IUchi(address(0)); // placeholder - TO-DO
     }
     
     /// @notice Serves as the constructor for clones, as clones can't have a regular constructor.
@@ -457,7 +507,7 @@ contract BoshiPairV1 is BoringOwnable, BoshiERC20 {
     }
 
     /// @notice This low-level function should be called from a contract which performs important safety checks.
-    function mint(address to) public lock returns (uint256 liquidity) {
+    function mint(address to) private returns (uint256 liquidity) {
         (uint112 _reserve0, uint112 _reserve1, ) = getReserves(); // gas savings
         uint256 balance0 = bentoBox.balanceOf(token0, address(this));
         uint256 balance1 = bentoBox.balanceOf(token1, address(this));
@@ -488,7 +538,7 @@ contract BoshiPairV1 is BoringOwnable, BoshiERC20 {
     }
 
     /// @notice This low-level function should be called from a contract which performs important safety checks.
-    function burn(address to) public lock returns (uint256 amount0, uint256 amount1) {
+    function burn(address to) private returns (uint256 amount0, uint256 amount1) {
         (uint112 _reserve0, uint112 _reserve1, ) = getReserves(); // gas savings
         IERC20 _token0 = token0;                                 // gas savings
         IERC20 _token1 = token1;                                 // gas savings
@@ -542,29 +592,29 @@ contract BoshiPairV1 is BoringOwnable, BoshiERC20 {
         _update(balance0, balance1, _reserve0, _reserve1);
         emit Swap(msg.sender, amount0In, amount1In, amount0Out, amount1Out, to);
     }
-    
+
     /// **** ADD LIQUIDITY ****
     function addLiquidity(
-        uint amount0Desired,
-        uint amount1Desired,
-        uint amount0Min,
-        uint amount1Min,
+        uint amountADesired,
+        uint amountBDesired,
+        uint amountAMin,
+        uint amountBMin,
         address to,
         uint deadline
-    ) external ensure(deadline) returns (uint256 amount0, uint256 amount1, uint256 liquidity) {
+    ) external ensure(deadline) lock returns (uint256 amount0, uint256 amount1, uint256 liquidity) {
         (uint112 _reserve0, uint112 _reserve1, ) = getReserves();
         if (_reserve0 == 0 && _reserve1 == 0) {
-            (amount0, amount1) = (amount0Desired, amount1Desired);
+            (amount0, amount1) = (amountADesired, amountBDesired);
         } else {
-            uint amount1Optimal = amount0Desired.mul(_reserve1) / _reserve0;
-            if (amount1Optimal <= amount1Desired) {
-                require(amount1Optimal >= amount1Min, 'Boshi: INSUFFICIENT_1_AMOUNT');
-                (amount0, amount1) = (amount0Desired, amount1Optimal);
+            uint amountBOptimal  = amountADesired.mul(_reserve1) / _reserve0;
+            if (amountBOptimal  <= amountBDesired) {
+                require(amountBOptimal  >= amountBMin, 'Boshi: INSUFFICIENT_B_AMOUNT');
+                (amount0, amount1) = (amountADesired, amountBOptimal );
             } else {
-                uint amount0Optimal = amount1Desired.mul(_reserve1) / _reserve0;
-                assert(amount0Optimal <= amount0Desired);
-                require(amount0Optimal >= amount0Min, 'Boshi: INSUFFICIENT_0_AMOUNT');
-                (amount0, amount1) = (amount0Optimal, amount1Desired);
+                uint amountAOptimal = amountBDesired.mul(_reserve1) / _reserve0;
+                assert(amountAOptimal <= amountADesired);
+                require(amountAOptimal >= amountAMin, 'Boshi: INSUFFICIENT_A_AMOUNT');
+                (amount0, amount1) = (amountAOptimal, amountBDesired);
             }
         }
         bentoBox.transfer(token0, msg.sender, address(this), amount0);
@@ -575,15 +625,15 @@ contract BoshiPairV1 is BoringOwnable, BoshiERC20 {
     /// **** REMOVE LIQUIDITY ****
     function removeLiquidity(
         uint liquidity,
-        uint amount0Min,
-        uint amount1Min,
+        uint amountAMin,
+        uint amountBMin,
         address to,
         uint deadline
-    ) external ensure(deadline) returns (uint amount0, uint amount1) {
+    ) external ensure(deadline) lock returns (uint amountA, uint amountB) {
         this.transferFrom(msg.sender, address(this), liquidity); // send liquidity to this pair
-        (amount0, amount1) = burn(to);
-        require(amount0 >= amount0Min, 'Boshi: INSUFFICIENT_0_AMOUNT');
-        require(amount1 >= amount1Min, 'Boshi: INSUFFICIENT_1_AMOUNT');
+        (amountA, amountB) = burn(to);
+        require(amountA >= amountAMin, 'Boshi: INSUFFICIENT_A_AMOUNT');
+        require(amountB >= amountBMin, 'Boshi: INSUFFICIENT_B_AMOUNT');
     }
 
     /// **** GOVERNANCE **** 
