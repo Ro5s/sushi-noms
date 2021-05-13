@@ -222,7 +222,7 @@ contract NekoSushi is ERC20, BaseBoringBatchable {
     string constant public name = "Neko SUSHI";
     string constant public symbol = "NEKO";
     uint8 constant public decimals = 18;
-    uint256 constant private multiplier = 1000; // 1 xSUSHI = 1000 NYAN
+    uint256 constant private multiplier = 999; // 1 xSUSHI = 999 NYAN
     uint256 public totalSupply;
     
     constructor() {
