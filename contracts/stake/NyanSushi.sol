@@ -3,6 +3,10 @@
 
 pragma solidity 0.8.4;
 
+// solhint-disable avoid-low-level-calls
+// solhint-disable not-rely-on-time
+// solhint-disable no-inline-assembly
+
 // File @boringcrypto/boring-solidity/contracts/Domain.sol@v1.2.0
 // License-Identifier: MIT
 // Based on code and smartness by Ross Campbell and Keno
