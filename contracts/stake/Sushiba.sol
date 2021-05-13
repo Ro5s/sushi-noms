@@ -227,7 +227,7 @@ interface IWETH9 {
     function withdraw(uint wad) external;
 }
 
-/// - make 18 decimals but scale SUBI shares?
+/// - make 18 decimals add scaling factor to SUBI shares?
 /// - add bentobox withdrawals ~~ 
 /// @notice Staking contract for xSUSHI with extra fun stuff.
 contract Sushiba is IERC20 {
