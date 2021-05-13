@@ -256,9 +256,8 @@ contract NekoSushi is ERC20, BaseBoringBatchable {
     /// @dev Leave NyanSushi. Claim back your xSUSHI.
     function unNyan(address to, uint256 amount) external {
         nyanBurn(amount);
-        uint256 adjusted = amount / multiplier;
-        bentoBox.withdraw(IERC20(sushiBar), address(this), address(this), 0, adjusted); // withdraw adjusted xSUSHI share amount from BENTO
-        ISushiBar(sushiBar).transfer(to, ISushiBar(sushiBar).balanceOf(address(this))); // transfer resulting xSUSHI to `to`
+        (uint256 amountOut, ) = bentoBox.withdraw(IERC20(sushiBar), address(this), address(this), 0, amount / multiplier); // withdraw adjusted xSUSHI share amount from BENTO
+        ISushiBar(sushiBar).transfer(to, amountOut); // transfer resulting xSUSHI to `to`
     }
     
     /// **** SUSHI NYAN ****
@@ -273,9 +272,8 @@ contract NekoSushi is ERC20, BaseBoringBatchable {
     /// @dev Leave NyanSushi. Claim back your SUSHI.
     function unNyanSUSHI(address to, uint256 amount) external {
         nyanBurn(amount);
-        uint256 adjusted = amount / multiplier;
-        bentoBox.withdraw(IERC20(sushiBar), address(this), address(this), 0, adjusted); // withdraw adjusted xSUSHI share amount from BENTO
-        ISushiBar(sushiBar).leave(adjusted); // burn resulting xSUSHI into SUSHI
+        (uint256 amountOut, ) = bentoBox.withdraw(IERC20(sushiBar), address(this), address(this), 0, amount / multiplier); // withdraw adjusted xSUSHI share amount from BENTO
+        ISushiBar(sushiBar).leave(amountOut); // burn resulting xSUSHI into SUSHI
         sushiToken.transfer(to, sushiToken.balanceOf(address(this))); // transfer resulting SUSHI to `to`
     }
     
