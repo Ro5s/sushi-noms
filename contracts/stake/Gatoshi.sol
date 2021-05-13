@@ -227,18 +227,18 @@ interface IWETH9 {
     function withdraw(uint wad) external;
 }
 
-/// - make 18 decimals add scaling factor to SUBI shares?
+/// - make 18 decimals add scaling factor to GATO shares?
 /// - add bentobox withdrawals ~~ 
 /// @notice Staking contract for xSUSHI with extra fun stuff.
-contract Sushiba is IERC20 {
+contract Gatoshi is IERC20 {
     IBentoBoxBasic constant bentoBox = IBentoBoxBasic(0xF5BCE5077908a1b7370B9ae04AdC565EBd643966); // BENTO vault contract
     IERC20 constant sushiToken = IERC20(0x6B3595068778DD592e39A122f4f5a5cF09C90fE2); // SUSHI token contract
     address constant sushiBar = 0x8798249c2E607446EfB7Ad49eC89dD1865Ff4272; // xSUSHI staking contract for SUSHI
     ISushiSwap constant sushiSwapSushiETHpair = ISushiSwap(0x795065dCc9f64b5614C407a6EFDC400DA6221FB0); // SUSHI/ETH pair on SushiSwap
     address constant wETH9 = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2; // ETH wrapper contract v9
     
-    string public constant name = "Sushiba";
-    string public constant symbol = "SUBI";
+    string public constant name = "Gatoshi";
+    string public constant symbol = "GATO";
     uint8  public constant decimals = 15;
     uint256 public override totalSupply;
 
@@ -247,17 +247,17 @@ contract Sushiba is IERC20 {
     uint256 public immutable deploymentChainId;
     bytes32 immutable _DOMAIN_SEPARATOR;
 
-    /// @dev Records amount of SUBI token owned by account.
+    /// @dev Records amount of GATO token owned by account.
     mapping (address => uint256) public override balanceOf;
 
     /// @dev Records current ERC2612 nonce for account. This value must be included whenever signature is generated for {permit}.
     /// Every successful call to {permit} increases account's nonce by one. This prevents signature from being used multiple times.
     mapping (address => uint256) public nonces;
 
-    /// @dev Records number of SUBI token that account (second) will be allowed to spend on behalf of another account (first) through {transferFrom}.
+    /// @dev Records number of GATO token that account (second) will be allowed to spend on behalf of another account (first) through {transferFrom}.
     mapping (address => mapping (address => uint256)) public override allowance;
 
-    /// @dev Current amount of flash-minted SUBI token.
+    /// @dev Current amount of flash-minted GATO token.
     uint256 public flashMinted;
     
     constructor() {
@@ -287,8 +287,8 @@ contract Sushiba is IERC20 {
         return chainId == deploymentChainId ? _DOMAIN_SEPARATOR : _calculateDomainSeparator(chainId);
     }
 
-    /// @dev Fallback, `msg.value` of ETH sent to this contract grants caller account a corresponding increase in SUBI token balance through `sushiBar` and `sushiSwapSushiETHpair`.
-    /// Emits {Transfer} event to reflect SUBI token mint of `msg.value` from `address(0)` to caller account.
+    /// @dev Fallback, `msg.value` of ETH sent to this contract grants caller account a corresponding increase in GATO token balance through `sushiBar` and `sushiSwapSushiETHpair`.
+    /// Emits {Transfer} event to reflect GATO token mint of `msg.value` from `address(0)` to caller account.
     receive() external payable {
         // _mintTo(msg.sender, value);
         (uint256 reserve0, uint256 reserve1, ) = sushiSwapSushiETHpair.getReserves();
@@ -305,8 +305,8 @@ contract Sushiba is IERC20 {
         emit Transfer(address(0), msg.sender, balance);
     }
 
-    /// @dev `value` of xSUSHI sent to this contract grants caller account a corresponding increase in SUBI token balance.
-    /// Emits {Transfer} event to reflect SUBI token mint of `value` from `address(0)` to caller account.
+    /// @dev `value` of xSUSHI sent to this contract grants caller account a corresponding increase in GATO token balance.
+    /// Emits {Transfer} event to reflect GATO token mint of `value` from `address(0)` to caller account.
     function deposit(uint256 value) external {
         // _mintTo(msg.sender, value);
         IERC20(sushiBar).transferFrom(msg.sender, address(this), value);
@@ -316,8 +316,8 @@ contract Sushiba is IERC20 {
         emit Transfer(address(0), msg.sender, value);
     }
 
-    /// @dev `value` of xSUSHI sent to this contract grants `to` account a corresponding increase in SUBI token balance.
-    /// Emits {Transfer} event to reflect SUBI token mint of `value` from `address(0)` to `to` account.
+    /// @dev `value` of xSUSHI sent to this contract grants `to` account a corresponding increase in GATO token balance.
+    /// Emits {Transfer} event to reflect GATO token mint of `value` from `address(0)` to `to` account.
     function depositTo(address to, uint256 value) external {
         // _mintTo(to, value)
         IERC20(sushiBar).transferFrom(msg.sender, address(this), value);
@@ -327,7 +327,7 @@ contract Sushiba is IERC20 {
         emit Transfer(address(0), to, value);
     }
 
-    /// @dev `value` of xSUSHI sent to this contract grants `to` account a corresponding increase in SUBI token balance,
+    /// @dev `value` of xSUSHI sent to this contract grants `to` account a corresponding increase in GATO token balance,
     /// after which a call is executed to an ERC677-compliant contract with the `data` parameter.
     /// Emits {Transfer} event.
     /// Returns boolean value indicating whether operation succeeded.
@@ -343,20 +343,20 @@ contract Sushiba is IERC20 {
         return ITransferReceiver(to).onTokenTransfer(msg.sender, value, data);
     }
 
-    /// @dev Returns the amount of SUBI token that can be flash-lent.
+    /// @dev Returns the amount of GATO token that can be flash-lent.
     function maxFlashLoan(address token) external view returns (uint256) {
         return token == address(this) ? type(uint112).max - flashMinted : 0; // Can't underflow
     }
 
-    /// @dev Returns the fee (zero) for flash lending an amount of SUBI token.
+    /// @dev Returns the fee (zero) for flash lending an amount of GATO token.
     function flashFee(address token, uint256) external view returns (uint256) {
-        require(token == address(this), "SUBI: flash mint only SUBI");
+        require(token == address(this), "GATO: flash mint only GATO");
         return 0;
     }
 
-    /// @dev Flash lends `value` SUBI token to the receiver address.
-    /// By the end of the transaction, `value` SUBI token will be burned from the receiver.
-    /// The flash-minted SUBI token is not backed by real xSUSHI, but can be withdrawn as such up to the xSUSHI balance of this contract.
+    /// @dev Flash lends `value` GATO token to the receiver address.
+    /// By the end of the transaction, `value` GATO token will be burned from the receiver.
+    /// The flash-minted GATO token is not backed by real xSUSHI, but can be withdrawn as such up to the xSUSHI balance of this contract.
     /// Arbitrary data can be passed as a bytes calldata parameter.
     /// Emits {Approval} event to reflect reduced allowance `value` for this contract to spend from receiver account (`receiver`),
     /// unless allowance is set to `type(uint256).max`
@@ -366,10 +366,10 @@ contract Sushiba is IERC20 {
     ///   - `value` must be less or equal to type(uint112).max.
     ///   - The total of all flash loans in a tx must be less or equal to type(uint112).max.
     function flashLoan(IERC3156FlashBorrower receiver, address token, uint256 value, bytes calldata data) external returns (bool) {
-        require(token == address(this), "SUBI: flash mint only SUBI");
-        require(value <= type(uint112).max, "SUBI: individual loan limit exceeded");
+        require(token == address(this), "GATO: flash mint only GATO");
+        require(value <= type(uint112).max, "GATO: individual loan limit exceeded");
         flashMinted = flashMinted + value;
-        require(flashMinted <= type(uint112).max, "SUBI: total loan limit exceeded");
+        require(flashMinted <= type(uint112).max, "GATO: total loan limit exceeded");
         
         // _mintTo(address(receiver), value);
         balanceOf[address(receiver)] += value;
@@ -377,13 +377,13 @@ contract Sushiba is IERC20 {
 
         require(
             receiver.onFlashLoan(msg.sender, address(this), value, 0, data) == CALLBACK_SUCCESS,
-            "SUBI: flash loan failed"
+            "GATO: flash loan failed"
         );
         
         // _decreaseAllowance(address(receiver), address(this), value);
         uint256 allowed = allowance[address(receiver)][address(this)];
         if (allowed != type(uint256).max) {
-            require(allowed >= value, "SUBI: request exceeds allowance");
+            require(allowed >= value, "GATO: request exceeds allowance");
             uint256 reduced = allowed - value;
             allowance[address(receiver)][address(this)] = reduced;
             emit Approval(address(receiver), address(this), reduced);
@@ -391,7 +391,7 @@ contract Sushiba is IERC20 {
 
         // _burnFrom(address(receiver), value);
         uint256 balance = balanceOf[address(receiver)];
-        require(balance >= value, "SUBI: burn amount exceeds balance");
+        require(balance >= value, "GATO: burn amount exceeds balance");
         balanceOf[address(receiver)] = balance - value;
         emit Transfer(address(receiver), address(0), value);
         
@@ -399,14 +399,14 @@ contract Sushiba is IERC20 {
         return true;
     }
 
-    /// @dev Burns `value` SUBI token from caller account and withdraw corresponding xSUSHI to the same.
-    /// Emits {Transfer} event to reflect SUBI token burn of `value` to `address(0)` from caller account. 
+    /// @dev Burns `value` GATO token from caller account and withdraw corresponding xSUSHI to the same.
+    /// Emits {Transfer} event to reflect GATO token burn of `value` to `address(0)` from caller account. 
     /// Requirements:
-    ///   - caller account must have at least `value` balance of SUBI token.
+    ///   - caller account must have at least `value` balance of GATO token.
     function withdraw(uint256 value) external {
         // _burnFrom(msg.sender, value);
         uint256 balance = balanceOf[msg.sender];
-        require(balance >= value, "SUBI: burn amount exceeds balance");
+        require(balance >= value, "GATO: burn amount exceeds balance");
         balanceOf[msg.sender] = balance - value;
         totalSupply -= value;
         emit Transfer(msg.sender, address(0), value);
@@ -415,14 +415,14 @@ contract Sushiba is IERC20 {
         IERC20(sushiBar).transfer(msg.sender, value);
     }
 
-    /// @dev Burns `value` SUBI token from caller account and withdraw corresponding xSUSHI to account (`to`).
-    /// Emits {Transfer} event to reflect SUBI token burn of `value` to `address(0)` from caller account.
+    /// @dev Burns `value` GATO token from caller account and withdraw corresponding xSUSHI to account (`to`).
+    /// Emits {Transfer} event to reflect GATO token burn of `value` to `address(0)` from caller account.
     /// Requirements:
-    ///   - caller account must have at least `value` balance of SUBI token.
+    ///   - caller account must have at least `value` balance of GATO token.
     function withdrawTo(address payable to, uint256 value) external {
         // _burnFrom(msg.sender, value);
         uint256 balance = balanceOf[msg.sender];
-        require(balance >= value, "SUBI: burn amount exceeds balance");
+        require(balance >= value, "GATO: burn amount exceeds balance");
         balanceOf[msg.sender] = balance - value;
         totalSupply -= value;
         emit Transfer(msg.sender, address(0), value);
@@ -431,19 +431,19 @@ contract Sushiba is IERC20 {
         IERC20(sushiBar).transfer(to, value);
     }
 
-    /// @dev Burns `value` SUBI token from account (`from`) and withdraw corresponding xSUSHI to account (`to`).
+    /// @dev Burns `value` GATO token from account (`from`) and withdraw corresponding xSUSHI to account (`to`).
     /// Emits {Approval} event to reflect reduced allowance `value` for caller account to spend from account (`from`),
     /// unless allowance is set to `type(uint256).max`
-    /// Emits {Transfer} event to reflect SUBI token burn of `value` to `address(0)` from account (`from`).
+    /// Emits {Transfer} event to reflect GATO token burn of `value` to `address(0)` from account (`from`).
     /// Requirements:
-    ///   - `from` account must have at least `value` balance of SUBI token.
-    ///   - `from` account must have approved caller to spend at least `value` of SUBI token, unless `from` and caller are the same account.
+    ///   - `from` account must have at least `value` balance of GATO token.
+    ///   - `from` account must have approved caller to spend at least `value` of GATO token, unless `from` and caller are the same account.
     function withdrawFrom(address from, address payable to, uint256 value) external {
         if (from != msg.sender) {
             // _decreaseAllowance(from, msg.sender, value);
             uint256 allowed = allowance[from][msg.sender];
             if (allowed != type(uint256).max) {
-                require(allowed >= value, "SUBI: request exceeds allowance");
+                require(allowed >= value, "GATO: request exceeds allowance");
                 uint256 reduced = allowed - value;
                 allowance[from][msg.sender] = reduced;
                 emit Approval(from, msg.sender, reduced);
@@ -452,7 +452,7 @@ contract Sushiba is IERC20 {
         
         // _burnFrom(from, value);
         uint256 balance = balanceOf[from];
-        require(balance >= value, "SUBI: burn amount exceeds balance");
+        require(balance >= value, "GATO: burn amount exceeds balance");
         balanceOf[from] = balance - value;
         totalSupply -= value;
         emit Transfer(from, address(0), value);
@@ -461,7 +461,7 @@ contract Sushiba is IERC20 {
         IERC20(sushiBar).transfer(to, value);
     }
 
-    /// @dev Sets `value` as allowance of `spender` account over caller account's SUBI token.
+    /// @dev Sets `value` as allowance of `spender` account over caller account's GATO token.
     /// Emits {Approval} event.
     /// Returns boolean value indicating whether operation succeeded.
     function approve(address spender, uint256 value) external override returns (bool) {
@@ -472,7 +472,7 @@ contract Sushiba is IERC20 {
         return true;
     }
 
-    /// @dev Sets `value` as allowance of `spender` account over caller account's SUBI token,
+    /// @dev Sets `value` as allowance of `spender` account over caller account's GATO token,
     /// after which a call is executed to an ERC677-compliant contract with the `data` parameter.
     /// Emits {Approval} event.
     /// Returns boolean value indicating whether operation succeeded.
@@ -485,7 +485,7 @@ contract Sushiba is IERC20 {
         return IApprovalReceiver(spender).onTokenApproval(msg.sender, value, data);
     }
 
-    /// @dev Sets `value` as allowance of `spender` account over `owner` account's SUBI token, given `owner` account's signed approval.
+    /// @dev Sets `value` as allowance of `spender` account over `owner` account's GATO token, given `owner` account's signed approval.
     /// Emits {Approval} event.
     /// Requirements:
     ///   - `deadline` must be timestamp in future.
@@ -493,9 +493,9 @@ contract Sushiba is IERC20 {
     ///   - the signature must use `owner` account's current nonce (see {nonces}).
     ///   - the signer cannot be `address(0)` and must be `owner` account.
     /// For more information on signature format, see https://eips.ethereum.org/EIPS/eip-2612#specification[relevant EIP section].
-    /// SUBI token implementation adapted from https://github.com/albertocuestacanada/ERC20Permit/blob/master/contracts/ERC20Permit.sol.
+    /// GATO token implementation adapted from https://github.com/albertocuestacanada/ERC20Permit/blob/master/contracts/ERC20Permit.sol.
     function permit(address owner, address spender, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external {
-        require(block.timestamp <= deadline, "SUBI: Expired permit");
+        require(block.timestamp <= deadline, "GATO: Expired permit");
 
         uint256 chainId;
         assembly {chainId := chainid()}
@@ -516,31 +516,31 @@ contract Sushiba is IERC20 {
                 hashStruct));
 
         address signer = ecrecover(hash, v, r, s);
-        require(signer != address(0) && signer == owner, "SUBI: invalid permit");
+        require(signer != address(0) && signer == owner, "GATO: invalid permit");
 
         // _approve(owner, spender, value);
         allowance[owner][spender] = value;
         emit Approval(owner, spender, value);
     }
 
-    /// @dev Moves `value` SUBI token from caller's account to account (`to`).
-    /// A transfer to `address(0)` triggers an xSUSHI withdraw matching the sent SUBI token in favor of caller.
+    /// @dev Moves `value` GATO token from caller's account to account (`to`).
+    /// A transfer to `address(0)` triggers an xSUSHI withdraw matching the sent GATO token in favor of caller.
     /// Emits {Transfer} event.
     /// Returns boolean value indicating whether operation succeeded.
     /// Requirements:
-    ///   - caller account must have at least `value` SUBI token.
+    ///   - caller account must have at least `value` GATO token.
     function transfer(address to, uint256 value) external override returns (bool) {
         // _transferFrom(msg.sender, to, value);
         if (to != address(0)) { // Transfer
             uint256 balance = balanceOf[msg.sender];
-            require(balance >= value, "SUBI: transfer amount exceeds balance");
+            require(balance >= value, "GATO: transfer amount exceeds balance");
 
             balanceOf[msg.sender] = balance - value;
             balanceOf[to] += value;
             emit Transfer(msg.sender, to, value);
         } else { // Withdraw
             uint256 balance = balanceOf[msg.sender];
-            require(balance >= value, "SUBI: burn amount exceeds balance");
+            require(balance >= value, "GATO: burn amount exceeds balance");
             balanceOf[msg.sender] = balance - value;
             emit Transfer(msg.sender, address(0), value);
             
@@ -551,22 +551,22 @@ contract Sushiba is IERC20 {
         return true;
     }
 
-    /// @dev Moves `value` SUBI token from account (`from`) to account (`to`) using allowance mechanism.
+    /// @dev Moves `value` GATO token from account (`from`) to account (`to`) using allowance mechanism.
     /// `value` is then deducted from caller account's allowance, unless set to `type(uint256).max`.
-    /// A transfer to `address(0)` triggers an xSUSHI withdraw matching the sent SUBI token in favor of caller.
+    /// A transfer to `address(0)` triggers an xSUSHI withdraw matching the sent GATO token in favor of caller.
     /// Emits {Approval} event to reflect reduced allowance `value` for caller account to spend from account (`from`),
     /// unless allowance is set to `type(uint256).max`
     /// Emits {Transfer} event.
     /// Returns boolean value indicating whether operation succeeded.
     /// Requirements:
-    ///   - `from` account must have at least `value` balance of SUBI token.
-    ///   - `from` account must have approved caller to spend at least `value` of SUBI token, unless `from` and caller are the same account.
+    ///   - `from` account must have at least `value` balance of GATO token.
+    ///   - `from` account must have approved caller to spend at least `value` of GATO token, unless `from` and caller are the same account.
     function transferFrom(address from, address to, uint256 value) external override returns (bool) {
         if (from != msg.sender) {
             // _decreaseAllowance(from, msg.sender, value);
             uint256 allowed = allowance[from][msg.sender];
             if (allowed != type(uint256).max) {
-                require(allowed >= value, "SUBI: request exceeds allowance");
+                require(allowed >= value, "GATO: request exceeds allowance");
                 uint256 reduced = allowed - value;
                 allowance[from][msg.sender] = reduced;
                 emit Approval(from, msg.sender, reduced);
@@ -576,14 +576,14 @@ contract Sushiba is IERC20 {
         // _transferFrom(from, to, value);
         if (to != address(0)) { // Transfer
             uint256 balance = balanceOf[from];
-            require(balance >= value, "SUBI: transfer amount exceeds balance");
+            require(balance >= value, "GATO: transfer amount exceeds balance");
 
             balanceOf[from] = balance - value;
             balanceOf[to] += value;
             emit Transfer(from, to, value);
         } else { // Withdraw
             uint256 balance = balanceOf[from];
-            require(balance >= value, "SUBI: burn amount exceeds balance");
+            require(balance >= value, "GATO: burn amount exceeds balance");
             balanceOf[from] = balance - value;
             emit Transfer(from, address(0), value);
         
@@ -594,26 +594,26 @@ contract Sushiba is IERC20 {
         return true;
     }
 
-    /// @dev Moves `value` SUBI token from caller's account to account (`to`), 
+    /// @dev Moves `value` GATO token from caller's account to account (`to`), 
     /// after which a call is executed to an ERC677-compliant contract with the `data` parameter.
-    /// A transfer to `address(0)` triggers an xSUSHI withdraw matching the sent SUBI token in favor of caller.
+    /// A transfer to `address(0)` triggers an xSUSHI withdraw matching the sent GATO token in favor of caller.
     /// Emits {Transfer} event.
     /// Returns boolean value indicating whether operation succeeded.
     /// Requirements:
-    ///   - caller account must have at least `value` SUBI token.
+    ///   - caller account must have at least `value` GATO token.
     /// For more information on {transferAndCall} format, see https://github.com/ethereum/EIPs/issues/677.
     function transferAndCall(address to, uint value, bytes calldata data) external returns (bool) {
         // _transferFrom(msg.sender, to, value);
         if (to != address(0)) { // Transfer
             uint256 balance = balanceOf[msg.sender];
-            require(balance >= value, "SUBI: transfer amount exceeds balance");
+            require(balance >= value, "GATO: transfer amount exceeds balance");
 
             balanceOf[msg.sender] = balance - value;
             balanceOf[to] += value;
             emit Transfer(msg.sender, to, value);
         } else { // Withdraw
             uint256 balance = balanceOf[msg.sender];
-            require(balance >= value, "SUBI: burn amount exceeds balance");
+            require(balance >= value, "GATO: burn amount exceeds balance");
             balanceOf[msg.sender] = balance - value;
             emit Transfer(msg.sender, address(0), value);
         
