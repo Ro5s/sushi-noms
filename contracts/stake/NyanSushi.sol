@@ -71,7 +71,7 @@ contract ERC20 is ERC20Data, Domain {
 
     /// @notice Transfers `amount` tokens from `msg.sender` to `to`.
     /// @param to The address to move the tokens.
-    /// @param amount of the tokens to move.
+    /// @param amount The token amount to move.
     /// @return (bool) Returns True if succeeded.
     function transfer(address to, uint256 amount) external returns (bool) {
         balanceOf[msg.sender] -= amount; 
@@ -86,9 +86,8 @@ contract ERC20 is ERC20Data, Domain {
     /// @param amount The token amount to move.
     /// @return (bool) Returns True if succeeded.
     function transferFrom(address from, address to, uint256 amount) external returns (bool) {
-        uint256 spenderAllowance = allowance[from][msg.sender];
         // If allowance is infinite, don't decrease it to save on gas (breaks with EIP-20).
-        if (spenderAllowance != type(uint256).max) {
+        if (allowance[from][msg.sender] != type(uint256).max) {
             allowance[from][msg.sender] -= amount;
         }
         balanceOf[from] -= amount;
@@ -97,11 +96,11 @@ contract ERC20 is ERC20Data, Domain {
         return true;
     }
 
-    /// @notice Approves `amount` from sender to be spend by `spender`.
+    /// @notice Approves `amount` from msg.sender to be spent by `spender`.
     /// @param spender Address of the party that can draw from msg.sender's account.
     /// @param amount The maximum collective amount that `spender` can draw.
     /// @return (bool) Returns True if approved.
-    function approve(address spender, uint256 amount) public returns (bool) {
+    function approve(address spender, uint256 amount) external returns (bool) {
         allowance[msg.sender][spender] = amount;
         emit Approval(msg.sender, spender, amount);
         return true;
@@ -110,9 +109,9 @@ contract ERC20 is ERC20Data, Domain {
     // keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
     bytes32 private constant PERMIT_SIGNATURE_HASH = 0x6e71edae12b1b97f4d1f60370fef10105fa2faae0126114a169c64845d6126c9;
 
-    /// @notice Approves `value` from `owner_` to be spend by `spender`.
+    /// @notice Approves `amount` from `owner` to be spent by `spender`.
     /// @param owner Address of the owner.
-    /// @param spender The address of the spender that gets approved to draw from `owner_`.
+    /// @param spender The address of the spender that gets approved to draw from `owner`.
     /// @param amount The maximum collective amount that `spender` can draw.
     /// @param deadline This permit must be redeemed before this deadline (UTC timestamp in seconds).
     function permit(
