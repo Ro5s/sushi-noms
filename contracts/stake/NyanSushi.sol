@@ -222,10 +222,9 @@ interface ISushiSwap {
     function swap(uint amount0Out, uint amount1Out, address to, bytes calldata data) external;
 }
 
-/// @notice Interface for Ether wrapper contract v9.
+/// @notice Interface for Ether wrapper contract v9 deposits.
 interface IWETH9 {
     function deposit() external payable;
-    function withdraw(uint wad) external;
     function transfer(address dst, uint wad) external returns (bool);
 }
 
