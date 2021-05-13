@@ -236,7 +236,7 @@ contract NyanSushi is ERC20, BaseBoringBatchable {
     ISushiSwap constant private sushiSwapSushiETHpair = ISushiSwap(0x795065dCc9f64b5614C407a6EFDC400DA6221FB0); // SUSHI/ETH pair on SushiSwap
     IWETH9 constant private wETH9 = IWETH9(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2); // ETH wrapper contract v9
     
-    string constant public name = "nySUSHI";
+    string constant public name = "nyanSUSHI";
     string constant public symbol = "NYAN";
     uint8 constant public decimals = 18;
     uint256 constant private multiplier = 100; // 1 xSUSHI = `multiplier` NYAN
