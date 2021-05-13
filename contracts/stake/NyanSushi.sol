@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
-// Gatoshi
+// NekoSushi....🐈_🍣_🍱
 
-pragma solidity 0.7.6;
-pragma experimental ABIEncoderV2;
+pragma solidity 0.8.4;
 
 // File @boringcrypto/boring-solidity/contracts/Domain.sol@v1.2.0
 // License-Identifier: MIT
@@ -212,6 +211,7 @@ interface ISushiBar {
     function balanceOf(address account) external view returns (uint256);
     function enter(uint256 amount) external;
     function leave(uint256 share) external;
+    function approve(address spender, uint256 amount) external returns (bool);
     function transfer(address recipient, uint256 amount) external returns (bool);
     function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
 }
@@ -229,19 +229,23 @@ interface IWETH9 {
     function transfer(address dst, uint wad) external returns (bool);
 }
 
-contract NyanSushi is ERC20, BaseBoringBatchable {
+contract NekoSushi is ERC20, BaseBoringBatchable {
     IBentoBoxBasic constant private bentoBox = IBentoBoxBasic(0xF5BCE5077908a1b7370B9ae04AdC565EBd643966); // BENTO vault contract
     ISushiBar constant private sushiToken = ISushiBar(0x6B3595068778DD592e39A122f4f5a5cF09C90fE2); // SUSHI token contract
     address constant private sushiBar = 0x8798249c2E607446EfB7Ad49eC89dD1865Ff4272; // xSUSHI staking contract for SUSHI
     ISushiSwap constant private sushiSwapSushiETHpair = ISushiSwap(0x795065dCc9f64b5614C407a6EFDC400DA6221FB0); // SUSHI/ETH pair on SushiSwap
     IWETH9 constant private wETH9 = IWETH9(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2); // ETH wrapper contract v9
     
-    string constant public name = "nyanSUSHI";
-    string constant public symbol = "NYAN";
+    string constant public name = "Neko SUSHI";
+    string constant public symbol = "NEKO";
     uint8 constant public decimals = 18;
     uint256 constant private multiplier = 100; // 1 xSUSHI = `multiplier` NYAN
     uint256 public totalSupply;
-
+    
+    constructor() {
+        ISushiBar(sushiBar).approve(address(bentoBox), type(uint256).max);
+    }
+    
     /// @dev Enter NyanSushi. Pay some xSUSHI. Get NYAN.
     function nyan(address to, uint256 amount) external {
         ISushiBar(sushiBar).transferFrom(msg.sender, address(this), amount);
@@ -254,7 +258,25 @@ contract NyanSushi is ERC20, BaseBoringBatchable {
         nyanBurn(amount);
         uint256 adjusted = amount / multiplier;
         bentoBox.withdraw(IERC20(sushiBar), address(this), address(this), 0, adjusted); // withdraw adjusted xSUSHI share amount from BENTO
-        ISushiBar(sushiBar).transfer(to, adjusted);
+        ISushiBar(sushiBar).transfer(to, ISushiBar(sushiBar).balanceOf(address(this))); // transfer resulting xSUSHI to `to`
+    }
+    
+    /// **** SUSHI NYAN ****
+    /// @dev Enter NyanSushi. Pay some SUSHI. Get NYAN.
+    function nyanSUSHI(address to, uint256 amount) external {
+        sushiToken.transferFrom(msg.sender, address(this), amount);
+        ISushiBar(sushiBar).enter(amount); // stake deposited SUSHI into `sushiBar` xSUSHI
+        (, uint256 shares) = bentoBox.deposit(IERC20(sushiBar), address(this), address(this), ISushiBar(sushiBar).balanceOf(address(this)), 0); // stake resulting xSUSHI into BENTO
+        nyanMint(to, shares * multiplier);
+    }
+
+    /// @dev Leave NyanSushi. Claim back your SUSHI.
+    function unNyanSUSHI(address to, uint256 amount) external {
+        nyanBurn(amount);
+        uint256 adjusted = amount / multiplier;
+        bentoBox.withdraw(IERC20(sushiBar), address(this), address(this), 0, adjusted); // withdraw adjusted xSUSHI share amount from BENTO
+        ISushiBar(sushiBar).leave(adjusted); // burn resulting xSUSHI into SUSHI
+        sushiToken.transfer(to, sushiToken.balanceOf(address(this))); // transfer resulting SUSHI to `to`
     }
     
     /// **** HELPER FUNCTIONS ****
@@ -266,19 +288,19 @@ contract NyanSushi is ERC20, BaseBoringBatchable {
         IWETH9(wETH9).deposit{value: msg.value}();
         IWETH9(wETH9).transfer(address(sushiSwapSushiETHpair), msg.value);
         sushiSwapSushiETHpair.swap(out, 0, address(this), "");
-        ISushiBar(sushiBar).enter(sushiToken.balanceOf(address(this))); // stake resulting SUSHI into `sushiBar` xSUSHI
+        ISushiBar(sushiBar).enter(sushiToken.balanceOf(address(this))); // stake resulting SUSHI into xSUSHI
         (, uint256 shares) = bentoBox.deposit(IERC20(sushiBar), address(this), address(this), ISushiBar(sushiBar).balanceOf(address(this)), 0); // stake resulting xSUSHI into BENTO
         nyanMint(msg.sender, shares * multiplier);
     }
     
-    /// @dev Internal mint function for {nyan}.
+    /// @dev Internal mint function for {nyan} and {nyanSUSHI}.
     function nyanMint(address to, uint256 amount) private {
         balanceOf[to] += amount;
         totalSupply += amount;
         emit Transfer(address(0), to, amount);
     }
     
-    /// @dev Internal burn function for {unNyan}.
+    /// @dev Internal burn function for {unNyan} and {unNyanSUSHI}.
     function nyanBurn(uint256 amount) private {
         balanceOf[msg.sender] -= amount;
         totalSupply -= amount;
