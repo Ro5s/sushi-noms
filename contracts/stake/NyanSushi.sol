@@ -230,20 +230,21 @@ interface IWETH9 {
 }
 
 contract NekoSushi is ERC20, BaseBoringBatchable {
-    IBentoBoxBasic constant bentoBox = IBentoBoxBasic(0xF5BCE5077908a1b7370B9ae04AdC565EBd643966); // BENTO vault contract
-    ISushiBar constant sushiToken = ISushiBar(0x6B3595068778DD592e39A122f4f5a5cF09C90fE2); // SUSHI token contract
-    address constant sushiBar = 0x8798249c2E607446EfB7Ad49eC89dD1865Ff4272; // xSUSHI staking contract for SUSHI
-    ISushiSwap constant sushiSwapSushiETHpair = ISushiSwap(0x795065dCc9f64b5614C407a6EFDC400DA6221FB0); // SUSHI/ETH pair on SushiSwap
-    IWETH9 constant wETH9 = IWETH9(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2); // ETH wrapper contract v9
+    IBentoBoxBasic constant private bentoBox = IBentoBoxBasic(0xF5BCE5077908a1b7370B9ae04AdC565EBd643966); // BENTO vault contract
+    ISushiBar constant private sushiToken = ISushiBar(0x6B3595068778DD592e39A122f4f5a5cF09C90fE2); // SUSHI token contract
+    address constant private sushiBar = 0x8798249c2E607446EfB7Ad49eC89dD1865Ff4272; // xSUSHI staking contract for SUSHI
+    ISushiSwap constant private sushiSwapSushiETHpair = ISushiSwap(0x795065dCc9f64b5614C407a6EFDC400DA6221FB0); // SUSHI/ETH pair on SushiSwap
+    IWETH9 constant private wETH9 = IWETH9(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2); // ETH wrapper contract v9
     
     string constant public name = "Neko SUSHI";
     string constant public symbol = "NEKO";
     uint8 constant public decimals = 18;
-    uint256 constant multiplier = 100; // 1 xSUSHI = `multiplier` NYAN
+    uint256 constant private multiplier = 1000; // 1 xSUSHI = 1000 NYAN
     uint256 public totalSupply;
     
     constructor() {
-        ISushiBar(sushiBar).approve(address(bentoBox), type(uint256).max);
+        sushiToken.approve(sushiBar, type(uint256).max); // max approve `sushiBar` spender to pull SUSHI from this contract
+        ISushiBar(sushiBar).approve(address(bentoBox), type(uint256).max); // max approve `bentoBox` spender to pull xSUSHI from this contract
     }
     
     /// @dev Enter NyanSushi. Pay some xSUSHI. Get NYAN.
