@@ -136,6 +136,9 @@ contract ERC20 is ERC20Data, Domain {
     }
 }
 
+// File @boringcrypto/boring-solidity/contracts/BoringBatchable.sol@v1.2.0
+// License-Identifier: MIT
+
 contract BaseBoringBatchable {
     /// @dev Helper function to extract a useful revert message from a failed call.
     /// If the returned data is malformed or not correctly abi encoded then this call can fail itself.
@@ -208,6 +211,7 @@ interface IWETH9 {
     function transfer(address dst, uint wad) external returns (bool);
 }
 
+/// @notice NekoSushi takes ETH, SUSHI or xSUSHI and mints Neko tokens that can be burned to claim back SUSHI or xSUSHI with yield.
 contract NekoSushi is ERC20, BaseBoringBatchable {
     IBentoBoxBasic constant private bentoBox = IBentoBoxBasic(0xF5BCE5077908a1b7370B9ae04AdC565EBd643966); // BENTO vault contract
     ISushiBar constant private sushiToken = ISushiBar(0x6B3595068778DD592e39A122f4f5a5cF09C90fE2); // SUSHI token contract
