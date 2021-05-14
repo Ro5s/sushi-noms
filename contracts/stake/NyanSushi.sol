@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-// @title NekoSushi....🐈_🍣_🍱
+// @title Meowshi....🐈_🍣_🍱
 // @author Gatoshi Nyakamoto
 
 pragma solidity 0.8.4;
@@ -7,7 +7,7 @@ pragma solidity 0.8.4;
 // File @boringcrypto/boring-solidity/contracts/Domain.sol@v1.2.0
 // License-Identifier: MIT
 
-/// @dev Adapted for NekoSushi.
+/// @dev Adapted for Meowshi.
 contract Domain {
     bytes32 private constant DOMAIN_SEPARATOR_SIGNATURE_HASH = keccak256("EIP712Domain(uint256 chainId,address verifyingContract)");
     /// @dev See https://eips.ethereum.org/EIPS/eip-191.
@@ -46,7 +46,7 @@ contract Domain {
 // File @boringcrypto/boring-solidity/contracts/ERC20.sol@v1.2.0
 // License-Identifier: MIT
 
-/// @dev Adapted for NekoSushi.
+/// @dev Adapted for Meowshi.
 contract ERC20 is Domain {
     /// @notice owner > balance mapping.
     mapping(address => uint256) public balanceOf;
@@ -127,7 +127,7 @@ contract ERC20 is Domain {
 // File @boringcrypto/boring-solidity/contracts/BoringBatchable.sol@v1.2.0
 // License-Identifier: MIT
 
-/// @dev Adapted for NekoSushi.
+/// @dev Adapted for Meowshi.
 contract BaseBoringBatchable {
     /// @dev Helper function to extract a useful revert message from a failed call.
     /// If the returned data is malformed or not correctly abi-encoded, this call can fail itself.
@@ -184,17 +184,17 @@ interface ISushiBar {
     function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
 }
 
-/// @notice NekoSushi takes SUSHI / xSUSHI to mint NYAN tokens that can be burned to claim SUSHI / xSUSHI from BENTO with yields.
+/// @notice Meowshi takes SUSHI / xSUSHI to mint NYAN tokens that can be burned to claim SUSHI / xSUSHI from BENTO with yields.
 //  ៱˳_˳៱   ∫
-contract NekoSushi is ERC20, BaseBoringBatchable {
+contract Meowshi is ERC20, BaseBoringBatchable {
     IBentoBoxBasic private constant bentoBox = IBentoBoxBasic(0xF5BCE5077908a1b7370B9ae04AdC565EBd643966); // BENTO vault contract
     ISushiBar private constant sushiToken = ISushiBar(0x6B3595068778DD592e39A122f4f5a5cF09C90fE2); // SUSHI token contract
     address private constant sushiBar = 0x8798249c2E607446EfB7Ad49eC89dD1865Ff4272; // xSUSHI token contract for staking SUSHI
 
-    string public constant name = "NekoSushi";
+    string public constant name = "Meowshi";
     string public constant symbol = "NYAN";
     uint8 public constant decimals = 18;
-    uint256 private constant multiplier = 999; // 1 xSUSHI BENTO share = 999 NYAN
+    uint256 private constant multiplier = 10000; // 1 xSUSHI BENTO share = 10000 NYAN
     uint256 public totalSupply;
     
     constructor() {
@@ -203,21 +203,21 @@ contract NekoSushi is ERC20, BaseBoringBatchable {
     }
     
     // **** xSUSHI
-    /// @notice Enter NekoSushi. Deposit xSUSHI `amount`. Mint NYAN for `to`.
+    /// @notice Enter Meowshi. Deposit xSUSHI `amount`. Mint NYAN for `to`.
     function nyan(address to, uint256 amount) external returns (uint256 shares) {
         ISushiBar(sushiBar).transferFrom(msg.sender, address(this), amount);
         (, shares) = bentoBox.deposit(IERC20(sushiBar), address(this), address(this), amount, 0);
         nyanMint(to, shares * multiplier);
     }
 
-    /// @notice Leave NekoSushi. Burn NYAN `amount`. Claim xSUSHI for `to`.
+    /// @notice Leave Meowshi. Burn NYAN `amount`. Claim xSUSHI for `to`.
     function unNyan(address to, uint256 amount) external returns (uint256 amountOut) {
         nyanBurn(amount);
         (amountOut, ) = bentoBox.withdraw(IERC20(sushiBar), address(this), to, 0, amount / multiplier);
     }
     
     // **** SUSHI
-    /// @notice Enter NekoSushi. Deposit SUSHI `amount`. Mint NYAN for `to`.
+    /// @notice Enter Meowshi. Deposit SUSHI `amount`. Mint NYAN for `to`.
     function nyanSushi(address to, uint256 amount) external returns (uint256 shares) {
         sushiToken.transferFrom(msg.sender, address(this), amount);
         ISushiBar(sushiBar).enter(amount);
@@ -225,7 +225,7 @@ contract NekoSushi is ERC20, BaseBoringBatchable {
         nyanMint(to, shares * multiplier);
     }
 
-    /// @notice Leave NekoSushi. Burn NYAN `amount`. Claim SUSHI for `to`.
+    /// @notice Leave Meowshi. Burn NYAN `amount`. Claim SUSHI for `to`.
     function unNyanSushi(address to, uint256 amount) external returns (uint256 amountOut) {
         nyanBurn(amount);
         (amountOut, ) = bentoBox.withdraw(IERC20(sushiBar), address(this), address(this), 0, amount / multiplier);
