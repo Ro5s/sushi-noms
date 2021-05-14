@@ -204,32 +204,31 @@ contract NekoSushi is ERC20, BaseBoringBatchable {
     
     // **** xSUSHI
     /// @notice Enter NekoSushi. Deposit xSUSHI `amount`. Mint NEKO for `to`.
-    function nyan(address to, uint256 amount) external {
+    function nyan(address to, uint256 amount) external returns (uint256 shares) {
         ISushiBar(sushiBar).transferFrom(msg.sender, address(this), amount);
-        (, uint256 shares) = bentoBox.deposit(IERC20(sushiBar), address(this), address(this), amount, 0);
+        (, shares) = bentoBox.deposit(IERC20(sushiBar), address(this), address(this), amount, 0);
         nekoMint(to, shares * multiplier);
     }
 
     /// @notice Leave NekoSushi. Burn NEKO `amount`. Claim xSUSHI for `to`.
-    function unNyan(address to, uint256 amount) external {
+    function unNyan(address to, uint256 amount) external returns (uint256 amountOut) {
         nekoBurn(amount);
-        (uint256 amountOut, ) = bentoBox.withdraw(IERC20(sushiBar), address(this), address(this), 0, amount / multiplier);
-        ISushiBar(sushiBar).transfer(to, amountOut);
+        (amountOut, ) = bentoBox.withdraw(IERC20(sushiBar), address(this), to, 0, amount / multiplier);
     }
     
     // **** SUSHI
     /// @notice Enter NekoSushi. Deposit SUSHI `amount`. Mint NEKO for `to`.
-    function nyanSushi(address to, uint256 amount) external {
+    function nyanSushi(address to, uint256 amount) external returns (uint256 shares) {
         sushiToken.transferFrom(msg.sender, address(this), amount);
         ISushiBar(sushiBar).enter(amount);
-        (, uint256 shares) = bentoBox.deposit(IERC20(sushiBar), address(this), address(this), ISushiBar(sushiBar).balanceOf(address(this)), 0);
+        (, shares) = bentoBox.deposit(IERC20(sushiBar), address(this), address(this), ISushiBar(sushiBar).balanceOf(address(this)), 0);
         nekoMint(to, shares * multiplier);
     }
 
     /// @notice Leave NekoSushi. Burn NEKO `amount`. Claim SUSHI for `to`.
-    function unNyanSushi(address to, uint256 amount) external {
+    function unNyanSushi(address to, uint256 amount) external returns (uint256 amountOut) {
         nekoBurn(amount);
-        (uint256 amountOut, ) = bentoBox.withdraw(IERC20(sushiBar), address(this), address(this), 0, amount / multiplier);
+        (amountOut, ) = bentoBox.withdraw(IERC20(sushiBar), address(this), address(this), 0, amount / multiplier);
         ISushiBar(sushiBar).leave(amountOut);
         sushiToken.transfer(to, sushiToken.balanceOf(address(this))); 
     }
