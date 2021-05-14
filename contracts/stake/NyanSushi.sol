@@ -184,7 +184,7 @@ interface ISushiBar {
     function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
 }
 
-/// @notice NekoSushi takes SUSHI / xSUSHI to mint NEKO tokens that can be burned to claim SUSHI / xSUSHI from BENTO with yields.
+/// @notice NekoSushi takes SUSHI / xSUSHI to mint NYAN tokens that can be burned to claim SUSHI / xSUSHI from BENTO with yields.
 //  ៱˳_˳៱   ∫
 contract NekoSushi is ERC20, BaseBoringBatchable {
     IBentoBoxBasic private constant bentoBox = IBentoBoxBasic(0xF5BCE5077908a1b7370B9ae04AdC565EBd643966); // BENTO vault contract
@@ -192,9 +192,9 @@ contract NekoSushi is ERC20, BaseBoringBatchable {
     address private constant sushiBar = 0x8798249c2E607446EfB7Ad49eC89dD1865Ff4272; // xSUSHI token contract for staking SUSHI
 
     string public constant name = "NekoSushi";
-    string public constant symbol = "NEKO";
+    string public constant symbol = "NYAN";
     uint8 public constant decimals = 18;
-    uint256 private constant multiplier = 999; // 1 xSUSHI BENTO share = 999 NEKO
+    uint256 private constant multiplier = 999; // 1 xSUSHI BENTO share = 999 NYAN
     uint256 public totalSupply;
     
     constructor() {
@@ -203,31 +203,31 @@ contract NekoSushi is ERC20, BaseBoringBatchable {
     }
     
     // **** xSUSHI
-    /// @notice Enter NekoSushi. Deposit xSUSHI `amount`. Mint NEKO for `to`.
+    /// @notice Enter NekoSushi. Deposit xSUSHI `amount`. Mint NYAN for `to`.
     function nyan(address to, uint256 amount) external returns (uint256 shares) {
         ISushiBar(sushiBar).transferFrom(msg.sender, address(this), amount);
         (, shares) = bentoBox.deposit(IERC20(sushiBar), address(this), address(this), amount, 0);
-        nekoMint(to, shares * multiplier);
+        nyanMint(to, shares * multiplier);
     }
 
-    /// @notice Leave NekoSushi. Burn NEKO `amount`. Claim xSUSHI for `to`.
+    /// @notice Leave NekoSushi. Burn NYAN `amount`. Claim xSUSHI for `to`.
     function unNyan(address to, uint256 amount) external returns (uint256 amountOut) {
-        nekoBurn(amount);
+        nyanBurn(amount);
         (amountOut, ) = bentoBox.withdraw(IERC20(sushiBar), address(this), to, 0, amount / multiplier);
     }
     
     // **** SUSHI
-    /// @notice Enter NekoSushi. Deposit SUSHI `amount`. Mint NEKO for `to`.
+    /// @notice Enter NekoSushi. Deposit SUSHI `amount`. Mint NYAN for `to`.
     function nyanSushi(address to, uint256 amount) external returns (uint256 shares) {
         sushiToken.transferFrom(msg.sender, address(this), amount);
         ISushiBar(sushiBar).enter(amount);
         (, shares) = bentoBox.deposit(IERC20(sushiBar), address(this), address(this), ISushiBar(sushiBar).balanceOf(address(this)), 0);
-        nekoMint(to, shares * multiplier);
+        nyanMint(to, shares * multiplier);
     }
 
-    /// @notice Leave NekoSushi. Burn NEKO `amount`. Claim SUSHI for `to`.
+    /// @notice Leave NekoSushi. Burn NYAN `amount`. Claim SUSHI for `to`.
     function unNyanSushi(address to, uint256 amount) external returns (uint256 amountOut) {
-        nekoBurn(amount);
+        nyanBurn(amount);
         (amountOut, ) = bentoBox.withdraw(IERC20(sushiBar), address(this), address(this), 0, amount / multiplier);
         ISushiBar(sushiBar).leave(amountOut);
         sushiToken.transfer(to, sushiToken.balanceOf(address(this))); 
@@ -235,14 +235,14 @@ contract NekoSushi is ERC20, BaseBoringBatchable {
 
     // **** SUPPLY
     /// @notice Internal mint function for *nyan*.
-    function nekoMint(address to, uint256 amount) private {
+    function nyanMint(address to, uint256 amount) private {
         balanceOf[to] += amount;
         totalSupply += amount;
         emit Transfer(address(0), to, amount);
     }
     
     /// @notice Internal burn function for *unNyan*.
-    function nekoBurn(uint256 amount) private {
+    function nyanBurn(uint256 amount) private {
         balanceOf[msg.sender] -= amount;
         totalSupply -= amount;
         emit Transfer(msg.sender, address(0), amount);
