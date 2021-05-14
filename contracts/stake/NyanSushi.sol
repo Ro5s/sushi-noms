@@ -1,12 +1,8 @@
-/// SPDX-License-Identifier: UNLICENSED
-/// @title NekoSushi....🐈_🍣_🍱
-/// @author Gatoshi Nyakamoto
+// SPDX-License-Identifier: UNLICENSED
+// @title NekoSushi....🐈_🍣_🍱
+// @author Gatoshi Nyakamoto
 
 pragma solidity 0.8.4;
-
-// solhint-disable avoid-low-level-calls
-// solhint-disable not-rely-on-time
-// solhint-disable no-inline-assembly
 
 // File @boringcrypto/boring-solidity/contracts/Domain.sol@v1.2.0
 // License-Identifier: MIT
@@ -14,10 +10,9 @@ pragma solidity 0.8.4;
 /// @dev Adapted for NekoSushi.
 contract Domain {
     bytes32 private constant DOMAIN_SEPARATOR_SIGNATURE_HASH = keccak256("EIP712Domain(uint256 chainId,address verifyingContract)");
-    // See https://eips.ethereum.org/EIPS/eip-191
+    /// @dev See https://eips.ethereum.org/EIPS/eip-191.
     string private constant EIP191_PREFIX_FOR_EIP712_STRUCTURED_DATA = "\x19\x01";
 
-    // solhint-disable var-name-mixedcase
     bytes32 private immutable _DOMAIN_SEPARATOR;
     uint256 private immutable DOMAIN_SEPARATOR_CHAIN_ID;
 
@@ -57,7 +52,7 @@ contract ERC20 is Domain {
     mapping(address => uint256) public balanceOf;
     /// @notice owner > spender > allowance mapping.
     mapping(address => mapping(address => uint256)) public allowance;
-    /// @notice owner > nonce mapping. Used in {permit}.
+    /// @notice owner > nonce mapping (used in {permit}).
     mapping(address => uint256) public nonces;
     
     event Transfer(address indexed from, address indexed to, uint256 amount);
@@ -100,7 +95,7 @@ contract ERC20 is Domain {
         return true;
     }
 
-    // keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
+    /// @dev keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)").
     bytes32 private constant PERMIT_SIGNATURE_HASH = 0x6e71edae12b1b97f4d1f60370fef10105fa2faae0126114a169c64845d6126c9;
 
     /// @notice Approves `amount` from `owner` to be spent by `spender` using EIP-2612 method.
@@ -135,7 +130,7 @@ contract ERC20 is Domain {
 /// @dev Adapted for NekoSushi.
 contract BaseBoringBatchable {
     /// @dev Helper function to extract a useful revert message from a failed call.
-    /// If the returned data is malformed or not correctly abi encoded then this call can fail itself.
+    /// If the returned data is malformed or not correctly abi-encoded, this call can fail itself.
     function _getRevertMsg(bytes memory _returnData) private pure returns (string memory) {
         // @dev If the length is less than 68, the transaction failed silently (without a revert message).
         if (_returnData.length < 68) return "Transaction reverted silently";
@@ -207,7 +202,7 @@ contract NekoSushi is ERC20, BaseBoringBatchable {
         ISushiBar(sushiBar).approve(address(bentoBox), type(uint256).max); // max approve BENTO to draw xSUSHI from this contract
     }
     
-    /// **** xSUSHI NYAN
+    // **** xSUSHI
     /// @notice Enter NekoSushi. Deposit xSUSHI `amount`. Mint NEKO for `to`.
     function nyan(address to, uint256 amount) external {
         ISushiBar(sushiBar).transferFrom(msg.sender, address(this), amount);
@@ -222,7 +217,7 @@ contract NekoSushi is ERC20, BaseBoringBatchable {
         ISushiBar(sushiBar).transfer(to, amountOut);
     }
     
-    /// **** SUSHI NYAN
+    // **** SUSHI
     /// @notice Enter NekoSushi. Deposit SUSHI `amount`. Mint NEKO for `to`.
     function nyanSushi(address to, uint256 amount) external {
         sushiToken.transferFrom(msg.sender, address(this), amount);
@@ -239,7 +234,7 @@ contract NekoSushi is ERC20, BaseBoringBatchable {
         sushiToken.transfer(to, sushiToken.balanceOf(address(this))); 
     }
 
-    /// **** HELPERS
+    // **** SUPPLY
     /// @notice Internal mint function for *nyan*.
     function nekoMint(address to, uint256 amount) private {
         balanceOf[to] += amount;
