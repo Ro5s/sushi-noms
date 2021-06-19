@@ -12,11 +12,7 @@ interface IERC20 {
 
 interface IBentoBoxV1BalanceAmount {
     function balanceOf(IERC20, address) external view returns (uint256);
-    function toAmount(
-        IERC20 token,
-        uint256 share,
-        bool roundUp
-    ) external view returns (uint256 amount);
+    function toAmount(IERC20 token, uint256 share, bool roundUp) external view returns (uint256 amount);
 }
 
 contract SUSHIPOWAH {
