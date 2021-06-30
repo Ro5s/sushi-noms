@@ -681,9 +681,9 @@ contract InariV1 is BoringBatchableWithDai, SushiZap {
     }
     
     /// @notice Helper function to approve this contract to spend tokens and enable strategies.
-    function bridgeToken(IERC20[] calldata token, address[] calldata to, uint256[] calldata amount) external {
+    function bridgeToken(IERC20[] calldata token, address[] calldata to) external {
         for (uint256 i = 0; i < token.length; i++) {
-            amount[i] == 0 ? token[i].safeApprove(to[i], type(uint256).max) : token[i].safeApprove(to[i], amount[i]); // if `amount` is zero, max approve `to` spender to pull `token` from this contract - o/wise, approve `amount`
+            token[i].safeApprove(to[i], type(uint256).max); // max approve `to` spender to pull `token` from this contract
         }
     }
 
